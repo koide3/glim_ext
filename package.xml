@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>glim_ext</name>
+  <version>0.0.0</version>
+  <description>A set of extensions for GLIM</description>
+
+  <maintainer email="k.koide@aist.go.jp">k.koide</maintainer>
+
+  <license>GPLv3</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>glim</depend>
+
+  <export>
+  </export>
+</package>

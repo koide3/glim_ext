@@ -1,0 +1,6 @@
+[submodule "glim_sc/thirdparty/scancontext"]
+	path = glim_sc/thirdparty/scancontext
+	url = https://github.com/irapkaist/scancontext.git
+[submodule "scan_context_loop_detector/thirdparty/scancontext"]
+	path = scan_context_loop_detector/thirdparty/scancontext
+	url = https://github.com/koide3/scancontext.git
