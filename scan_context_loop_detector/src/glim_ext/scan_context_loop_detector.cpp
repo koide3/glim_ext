@@ -1,4 +1,4 @@
-#include <glim_ext/glim_sc.hpp>
+#include <glim_ext/scan_context_loop_detector.hpp>
 
 #include <deque>
 #include <mutex>
@@ -35,6 +35,7 @@ class ScanContextLoopDetector::Impl {
 public:
   Impl() {
     sc.reset(new SCManager);
+    sc->SC_DIST_THRES = 0.2;
 
     frame_count = 0;
 
@@ -131,6 +132,7 @@ public:
           continue;
         }
 
+        // TODO: should check if it's close to the current estimate?
         std::cout << "loop detected!!" << std::endl;
 
         using gtsam::symbol_shorthand::X;
@@ -168,6 +170,7 @@ public:
     graph.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(0, gtsam::Pose3::identity(), gtsam::noiseModel::Isotropic::Precision(6, 1e6));
 
     auto factor = gtsam::make_shared<gtsam_ext::IntegratedGICPFactor>(0, 1, frame1, frame2);
+    factor->set_num_threads(4);
     graph.add(factor);
 
     gtsam_ext::LevenbergMarquardtExtParams lm_params;

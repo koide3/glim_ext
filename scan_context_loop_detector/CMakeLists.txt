@@ -10,7 +10,7 @@ find_package(PCL REQUIRED)
 find_package(GTSAM REQUIRED)
 
 add_library(scan_context_loop_detector
-  src/glim_ext/glim_sc.cpp
+  src/glim_ext/scan_context_loop_detector.cpp
   thirdparty/scancontext/cpp/module/Scancontext/Scancontext.cpp
 )
 target_include_directories(scan_context_loop_detector PRIVATE
