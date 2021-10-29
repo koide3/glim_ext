@@ -4,8 +4,7 @@
 #include <atomic>
 #include <thread>
 #include <boost/format.hpp>
-#include <opencv2/core/core.hpp>
-#include <opencv2/features2d/features2d.hpp>
+#include <opencv2/opencv.hpp>
 
 #include <DBoW3.h>
 
@@ -18,10 +17,6 @@
 #include <glim/backend/callbacks.hpp>
 #include <glim/util/console_colors.hpp>
 #include <glim/util/concurrent_vector.hpp>
-
-#include <glk/texture.hpp>
-#include <glk/texture_opencv.hpp>
-#include <guik/viewer/light_viewer.hpp>
 
 namespace glim {
 
@@ -82,13 +77,6 @@ public:
     notify(INFO, "[DBoW] Loading ORB vocabulary...");
     voc.reset(new DBoW3::Vocabulary(voc_path));
     db.reset(new DBoW3::Database(*voc, false, 0));
-    /*
-    if (!voc->loadFromTextFile(voc_path)) {
-      std::cerr << console::bold_red << "error: failed to load ORB vocabulary" << console::reset << std::endl;
-      notify(ERROR, "[DBoW] Failed to load ORB vocabulary");
-      return;
-    }
-    */
     notify(INFO, "[DBoW] ORB vocabulary loaded");
 
     while (!kill_switch) {
