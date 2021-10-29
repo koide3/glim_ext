@@ -3,8 +3,6 @@ project(scan_context_loop_detector)
 
 add_compile_options(-std=c++17)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
-
 find_package(glim REQUIRED)
 find_package(PCL REQUIRED)
 find_package(GTSAM REQUIRED)

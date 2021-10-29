@@ -34,8 +34,10 @@ namespace glim {
 class ScanContextLoopDetector::Impl {
 public:
   Impl() {
+    std::cout << "Creating ScanContext Manager... ";
     sc.reset(new SCManager);
     sc->SC_DIST_THRES = 0.2;
+    std::cout << "done" << std::endl;
 
     frame_count = 0;
 
