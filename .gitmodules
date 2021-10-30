@@ -7,3 +7,6 @@
 [submodule "dbow_loop_detector/thirdparty/DBoW3"]
 	path = dbow_loop_detector/thirdparty/DBoW3
 	url = https://github.com/rmsalinas/DBow3.git
+[submodule "orb_slam_frontend/thirdparty/ORB_SLAM3"]
+	path = orb_slam_frontend/thirdparty/ORB_SLAM3
+	url = https://github.com/koide3/ORB_SLAM3.git

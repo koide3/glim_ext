@@ -9,25 +9,6 @@ find_package(Boost REQUIRED COMPONENTS filesystem)
 find_package(glim REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(GTSAM REQUIRED)
-find_package(Iridescence REQUIRED)
-
-add_library(dbow2
-  thirdparty/DBoW2/src/BowVector.cpp
-  thirdparty/DBoW2/src/FeatureVector.cpp
-  thirdparty/DBoW2/src/QueryResults.cpp
-  thirdparty/DBoW2/src/ScoringObject.cpp
-  thirdparty/DBoW2/src/FORB.cpp
-)
-target_include_directories(dbow2 PRIVATE
-  thirdparty/DBoW2/include/DBoW2
-  ${OpenCV_INCLUDE_DIRS}
-  ${Boost_INCLUDE_DIRS}
-)
-target_link_libraries(dbow2
-  ${OpenCV_LIBRARIES}
-  ${Boost_LIBRARIES}
-)
-
 
 add_library(dbow3
   thirdparty/DBoW3/src/quicklz.c
@@ -59,32 +40,13 @@ target_include_directories(dbow_loop_detector PRIVATE
   ${OpenCV_INCLUDE_DIRS}
   ${GTSAM_INCLUDE_DIRS}
   ${glim_INCLUDE_DIRS}
-  ${Iridescence_INCLUDE_DIRS}
 )
 target_link_libraries(dbow_loop_detector
   dbow3
   ${OpenCV_LIBRARIES}
   ${GTSAM_LIBRARIES}
   ${glim_LIBRARIES}
-  ${Iridescence_LIBRARIES}
 )
-
-
-add_executable(dbow2_training
-  src/glim_ext/dbow2_training.cpp
-)
-target_include_directories(dbow2_training PRIVATE
-  include
-  thirdparty/DBoW2/include/DBoW2
-  ${glim_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
-)
-target_link_libraries(dbow2_training
-  dbow2
-  ${glim_LIBRARIES}
-  ${OpenCV_LIBRARIES}
-)
-
 
 add_executable(dbow3_training
   src/glim_ext/dbow3_training.cpp
