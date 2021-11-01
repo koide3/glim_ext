@@ -1,6 +1,8 @@
 {
   "orb_slam": {
     "voc_path": "orb_slam/ORBvoc.txt",
+    "image_freq": 10,
+    "imu_freq": 200,
     "num_features": 2000
   }
 }
