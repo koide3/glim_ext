@@ -37,6 +37,7 @@ public:
     }
 
     kill_switch = false;
+    num_queued_images = 0;
     thread = std::thread([this] { frontend_task(); });
     system.reset(new ORB_SLAM3::System(voc_path, settings_path, ORB_SLAM3::System::IMU_MONOCULAR, true));
   }
@@ -71,7 +72,7 @@ public:
     // k3?
     ofs << "Camera.width: " << image_size[0] << std::endl;
     ofs << "Camera.height: " << image_size[1] << std::endl;
-    ofs << "Camera.fps: " << 10.0 << std::endl;
+    ofs << "Camera.fps: " << 30.0 << std::endl;
     ofs << "Camera.RGB: 1" << std::endl;
 
     ofs << "Tbc: !!opencv-matrix" << std::endl;
@@ -87,13 +88,13 @@ public:
     }
     ofs << "]" << std::endl;
 
-    ofs << "IMU.NoiseGyro: 1.7e-1" << std::endl;
-    ofs << "IMU.NoiseAcc: 2.0000e-1" << std::endl;
-    ofs << "IMU.GyroWalk: 1.9393e-02 " << std::endl;
-    ofs << "IMU.AccWalk: 3.0000e-01" << std::endl;
-    ofs << "IMU.Frequency: 200" << std::endl;
+    ofs << "IMU.NoiseGyro: 1.7e-3" << std::endl;
+    ofs << "IMU.NoiseAcc: 2.0000e-3" << std::endl;
+    ofs << "IMU.GyroWalk: 1.9393e-03 " << std::endl;
+    ofs << "IMU.AccWalk: 3.0000e-03" << std::endl;
+    ofs << "IMU.Frequency: 250" << std::endl;
 
-    ofs << "ORBextractor.nFeatures: 2000" << std::endl;
+    ofs << "ORBextractor.nFeatures: 1000" << std::endl;
     ofs << "ORBextractor.scaleFactor: 1.2" << std::endl;
     ofs << "ORBextractor.nLevels: 8" << std::endl;
     ofs << "ORBextractor.iniThFAST: 20" << std::endl;
@@ -130,13 +131,9 @@ public:
       image_queue.insert(image_queue.end(), new_images.begin(), new_images.end());
       imu_queue.insert(imu_queue.end(), new_imu_frames.begin(), new_imu_frames.end());
 
-      std::cout << "image:" << image_queue.size() << " imu:" << imu_queue.size() << std::endl;
-
-      if (image_queue.empty() || imu_queue.empty()) {
-        continue;
-      }
-
-      if (image_queue.front().first > imu_queue.back()[0]) {
+      num_queued_images = image_queue.size();
+      if (image_queue.empty() || imu_queue.empty() || image_queue.front().first > imu_queue.back()[0]) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         continue;
       }
 
@@ -158,9 +155,14 @@ public:
 
       imu_queue.erase(imu_queue.begin(), imu_queue.begin() + imu_cursor);
       cv::Mat T_world_camera = system->TrackMonocular(image, image_stamp, imu_measurements);
-      std::cout << "imu:" << imu_measurements.size() << std::endl;
+
+      if (!T_world_camera.data) {
+        image_queue.clear();
+      }
     }
   }
+
+  int num_images_in_queue() const { return num_queued_images; }
 
 private:
   std::unique_ptr<ORB_SLAM3::System> system;
@@ -170,6 +172,8 @@ private:
 
   std::atomic_bool kill_switch;
   std::thread thread;
+
+  std::atomic_int num_queued_images;
 };
 
 OrbSLAMFrontend::OrbSLAMFrontend(bool use_own_imu_topic, bool use_own_image_topic) {
@@ -184,6 +188,10 @@ void OrbSLAMFrontend::insert_imu(const double stamp, const Eigen::Vector3d& line
 
 void OrbSLAMFrontend::insert_image(const double stamp, const cv::Mat& image) {
   impl->on_insert_image(stamp, image);
+}
+
+int OrbSLAMFrontend::num_images_in_queue() const {
+  return impl->num_images_in_queue();
 }
 
 }  // namespace glim
