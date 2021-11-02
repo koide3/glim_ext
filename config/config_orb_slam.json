@@ -3,6 +3,6 @@
     "voc_path": "orb_slam/ORBvoc.txt",
     "image_freq": 30,
     "imu_freq": 250,
-    "nFeatures": 1000
+    "num_features": 1000
   }
 }

@@ -8,6 +8,7 @@
 #include <System.h>
 #include <ImuTypes.h>
 
+#include <glim/common/callbacks.hpp>
 #include <glim/util/concurrent_vector.hpp>
 #include <glim/frontend/callbacks.hpp>
 #include <glim_ext/util/config_ext.hpp>
@@ -22,11 +23,21 @@ public:
     const std::string voc_path = data_path + "/" + config.param<std::string>("orb_slam", "voc_path", "orb_slam/ORBvoc.txt");
     const std::string settings_path = "/tmp/orb_slam_settings.yaml";
 
+    image_freq = config.param<int>("orb_slam", "image_freq", 10);
+    imu_freq = config.param<int>("orb_slam", "imu_freq", 100);
+    num_features = config.param<int>("orb_slam", "num_features", 1000);
+
     write_orb_slam_settings(settings_path);
+
+    notify(INFO, "[orb_slam] Starting ORB_SLAM...");
+    system.reset(new ORB_SLAM3::System(voc_path, settings_path, ORB_SLAM3::System::IMU_MONOCULAR, true));
+    notify(INFO, "[orb_slam] Ready");
 
     using std::placeholders::_1;
     using std::placeholders::_2;
     using std::placeholders::_3;
+    OdometryEstimationCallbacks::on_insert_frame.add(std::bind(&Impl::on_insert_frame, this, _1));
+
     if (!use_own_imu_topic) {
       std::cout << "*** use default imu ***" << std::endl;
       OdometryEstimationCallbacks::on_insert_imu.add(std::bind(&Impl::on_insert_imu, this, _1, _2, _3));
@@ -39,8 +50,8 @@ public:
     kill_switch = false;
     num_queued_images = 0;
     thread = std::thread([this] { frontend_task(); });
-    system.reset(new ORB_SLAM3::System(voc_path, settings_path, ORB_SLAM3::System::IMU_MONOCULAR, true));
   }
+
   ~Impl() {
     kill_switch = true;
     if (thread.joinable()) {
@@ -72,7 +83,7 @@ public:
     // k3?
     ofs << "Camera.width: " << image_size[0] << std::endl;
     ofs << "Camera.height: " << image_size[1] << std::endl;
-    ofs << "Camera.fps: " << 30.0 << std::endl;
+    ofs << "Camera.fps: " << image_freq << std::endl;
     ofs << "Camera.RGB: 1" << std::endl;
 
     ofs << "Tbc: !!opencv-matrix" << std::endl;
@@ -92,9 +103,9 @@ public:
     ofs << "IMU.NoiseAcc: 2.0000e-3" << std::endl;
     ofs << "IMU.GyroWalk: 1.9393e-03 " << std::endl;
     ofs << "IMU.AccWalk: 3.0000e-03" << std::endl;
-    ofs << "IMU.Frequency: 250" << std::endl;
+    ofs << "IMU.Frequency: " << imu_freq << std::endl;
 
-    ofs << "ORBextractor.nFeatures: 1000" << std::endl;
+    ofs << "ORBextractor.nFeatures: " << num_features << std::endl;
     ofs << "ORBextractor.scaleFactor: 1.2" << std::endl;
     ofs << "ORBextractor.nLevels: 8" << std::endl;
     ofs << "ORBextractor.iniThFAST: 20" << std::endl;
@@ -119,6 +130,17 @@ public:
   }
 
   void on_insert_image(const double stamp, const cv::Mat& image) { input_image_queue.push_back(std::make_pair(stamp, image)); }
+
+  void on_insert_frame(const PreprocessedFrame::Ptr& frame) {
+    if (num_queued_images >= 2) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(num_queued_images * 2));
+    }
+
+    while (num_queued_images > 60) {
+      notify(INFO, "[orb_slam] Stopping the frontend");
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
 
   void frontend_task() {
     std::deque<std::pair<double, cv::Mat>> image_queue;
@@ -162,10 +184,12 @@ public:
     }
   }
 
-  int num_images_in_queue() const { return num_queued_images; }
-
 private:
   std::unique_ptr<ORB_SLAM3::System> system;
+
+  int imu_freq;
+  int image_freq;
+  int num_features;
 
   ConcurrentVector<std::pair<double, cv::Mat>> input_image_queue;
   ConcurrentVector<Eigen::Matrix<double, 7, 1>, Eigen::aligned_allocator<Eigen::Matrix<double, 7, 1>>> input_imu_queue;
@@ -188,10 +212,6 @@ void OrbSLAMFrontend::insert_imu(const double stamp, const Eigen::Vector3d& line
 
 void OrbSLAMFrontend::insert_image(const double stamp, const cv::Mat& image) {
   impl->on_insert_image(stamp, image);
-}
-
-int OrbSLAMFrontend::num_images_in_queue() const {
-  return impl->num_images_in_queue();
 }
 
 }  // namespace glim
