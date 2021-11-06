@@ -8,6 +8,8 @@
 #include <System.h>
 #include <ImuTypes.h>
 
+#include <gtsam/slam/BetweenFactor.h>
+
 #include <glim/common/callbacks.hpp>
 #include <glim/util/concurrent_vector.hpp>
 #include <glim/frontend/callbacks.hpp>
@@ -17,17 +19,15 @@ namespace glim {
 
 class OrbSLAMFrontend::Impl {
 public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   Impl(bool use_own_imu_topic, bool use_own_image_topic) {
     glim::Config config(glim::GlobalConfigExt::get_config_path("config_orb_slam"));
     const std::string data_path = glim::GlobalConfigExt::get_data_path();
     const std::string voc_path = data_path + "/" + config.param<std::string>("orb_slam", "voc_path", "orb_slam/ORBvoc.txt");
     const std::string settings_path = "/tmp/orb_slam_settings.yaml";
 
-    image_freq = config.param<int>("orb_slam", "image_freq", 10);
-    imu_freq = config.param<int>("orb_slam", "imu_freq", 100);
-    num_features = config.param<int>("orb_slam", "num_features", 1000);
-
-    write_orb_slam_settings(settings_path);
+    write_orb_slam_settings(settings_path, config);
 
     notify(INFO, "[orb_slam] Starting ORB_SLAM...");
     system.reset(new ORB_SLAM3::System(voc_path, settings_path, ORB_SLAM3::System::IMU_MONOCULAR, true));
@@ -59,14 +59,14 @@ public:
     }
   }
 
-  void write_orb_slam_settings(const std::string& settings_path) {
-    glim::Config config(glim::GlobalConfigExt::get_config_path("config_sensors_ext"));
-    const auto intrinsics = config.param("sensors_ext", "camera_intrinsics", std::vector<double>());
-    const auto dist_coeffs = config.param("sensors_ext", "camera_distortion_coeffs", std::vector<double>());
-    const auto image_size = config.param("sensors_ext", "camera_image_size", std::vector<int>());
+  void write_orb_slam_settings(const std::string& settings_path, const glim::Config& orb_slam_config) {
+    glim::Config sensors_config(glim::GlobalConfigExt::get_config_path("config_sensors_ext"));
+    const auto intrinsics = sensors_config.param("sensors_ext", "camera_intrinsics", std::vector<double>());
+    const auto dist_coeffs = sensors_config.param("sensors_ext", "camera_distortion_coeffs", std::vector<double>());
+    const auto image_size = sensors_config.param("sensors_ext", "camera_image_size", std::vector<int>());
 
-    const Eigen::Isometry3d T_camera_imu = config.param("sensors_ext", "T_camera_imu", Eigen::Isometry3d::Identity());
-    const Eigen::Matrix<double, 4, 4, Eigen::RowMajor> Tbc = T_camera_imu.inverse().matrix();
+    const Eigen::Isometry3d T_imu_camera = sensors_config.param("sensors_ext", "T_imu_camera", Eigen::Isometry3d::Identity());
+    const Eigen::Matrix<double, 4, 4, Eigen::RowMajor> Tbc = T_imu_camera.matrix();
 
     std::ofstream ofs(settings_path);
 
@@ -83,7 +83,7 @@ public:
     // k3?
     ofs << "Camera.width: " << image_size[0] << std::endl;
     ofs << "Camera.height: " << image_size[1] << std::endl;
-    ofs << "Camera.fps: " << image_freq << std::endl;
+    ofs << "Camera.fps: " << orb_slam_config.param<int>("orb_slam", "image_freq", 10) << std::endl;
     ofs << "Camera.RGB: 1" << std::endl;
 
     ofs << "Tbc: !!opencv-matrix" << std::endl;
@@ -99,17 +99,17 @@ public:
     }
     ofs << "]" << std::endl;
 
-    ofs << "IMU.NoiseGyro: 1.7e-3" << std::endl;
-    ofs << "IMU.NoiseAcc: 2.0000e-3" << std::endl;
-    ofs << "IMU.GyroWalk: 1.9393e-03 " << std::endl;
-    ofs << "IMU.AccWalk: 3.0000e-03" << std::endl;
-    ofs << "IMU.Frequency: " << imu_freq << std::endl;
+    ofs << "IMU.NoiseGyro: " << sensors_config.param<double>("sensors_ext", "imu_gyro_noise", 0.01) << std::endl;
+    ofs << "IMU.NoiseAcc: " << sensors_config.param<double>("sensors_ext", "imu_acc_noise", 0.01) << std::endl;
+    ofs << "IMU.GyroWalk: " << sensors_config.param<double>("sensors_ext", "imu_int_noise", 0.01) << std::endl;
+    ofs << "IMU.AccWalk: " << sensors_config.param<double>("sensors_ext", "imu_int_noise", 0.01) << std::endl;
+    ofs << "IMU.Frequency: " << orb_slam_config.param<int>("orb_slam", "imu_freq", 100) << std::endl;
 
-    ofs << "ORBextractor.nFeatures: " << num_features << std::endl;
-    ofs << "ORBextractor.scaleFactor: 1.2" << std::endl;
-    ofs << "ORBextractor.nLevels: 8" << std::endl;
-    ofs << "ORBextractor.iniThFAST: 20" << std::endl;
-    ofs << "ORBextractor.minThFAST: 7" << std::endl;
+    ofs << "ORBextractor.nFeatures: " << orb_slam_config.param<int>("orb_slam", "num_features", 1000) << std::endl;
+    ofs << "ORBextractor.scaleFactor: " << orb_slam_config.param<double>("orb_slam", "scale_factor", 1.2) << std::endl;
+    ofs << "ORBextractor.nLevels: " << orb_slam_config.param<int>("orb_slam", "nlevels", 8) << std::endl;
+    ofs << "ORBextractor.iniThFAST: " << orb_slam_config.param<int>("orb_slam", "ini_th_fast", 20) << std::endl;
+    ofs << "ORBextractor.minThFAST: " << orb_slam_config.param<int>("orb_slam", "min_th_fast", 7) << std::endl;
 
     ofs << "Viewer.KeyFrameSize: 0.05" << std::endl;
     ofs << "Viewer.KeyFrameLineWidth: 1" << std::endl;
@@ -178,9 +178,9 @@ public:
       imu_queue.erase(imu_queue.begin(), imu_queue.begin() + imu_cursor);
       cv::Mat T_world_camera = system->TrackMonocular(image, image_stamp, imu_measurements);
 
-      if (!T_world_camera.data) {
-        image_queue.clear();
-      }
+      // if (!T_world_camera.data) {
+      //   image_queue.clear();
+      // }
     }
   }
 
