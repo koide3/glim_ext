@@ -16,11 +16,12 @@
 #include <gtsam_ext/factors/integrated_gicp_factor.hpp>
 #include <gtsam_ext/optimizers/levenberg_marquardt_ext.hpp>
 
-#include <glim/util/concurrent_vector.hpp>
+#include <glim/common/callbacks.hpp>
 #include <glim/frontend/callbacks.hpp>
 #include <glim/backend/callbacks.hpp>
 #include <glim/frontend/estimation_frame.hpp>
 #include <glim/backend/sub_map.hpp>
+#include <glim/util/concurrent_vector.hpp>
 
 #include <glk/pointcloud_buffer.hpp>
 #include <guik/viewer/light_viewer.hpp>
@@ -31,13 +32,22 @@
 
 namespace glim {
 
+/**
+ * @brief Implementation of ScanContext-based loop detector
+ * @note  TODO: make some hard-coded parameters configurable
+ *
+ */
 class ScanContextLoopDetector::Impl {
 public:
+  /**
+   * @brief Construct a new Impl object
+   *
+   */
   Impl() {
-    std::cout << "Creating ScanContext Manager... ";
+    notify(INFO, "[scan_context] Creating ScanContext manager...");
     sc.reset(new SCManager);
     sc->SC_DIST_THRES = 0.2;
-    std::cout << "done" << std::endl;
+    notify(INFO, "[scan_context] ScanContext manager created");
 
     frame_count = 0;
 
@@ -52,6 +62,10 @@ public:
     thread = std::thread([this] { loop_detection_task(); });
   }
 
+  /**
+   * @brief Destroy the Impl object
+   *
+   */
   ~Impl() {
     kill_switch = true;
     if (thread.joinable()) {
@@ -59,10 +73,28 @@ public:
     }
   }
 
+  /**
+   * @brief Odometry estimation frame input callback
+   *
+   * @param odom_frame
+   */
   void on_new_frame(const EstimationFrame::ConstPtr& odom_frame) { odom_frames_queue.push_back(odom_frame); }
 
+  /**
+   * @brief Submap input callback
+   *
+   * @param submap
+   */
   void on_new_submap(const SubMap::ConstPtr& submap) { new_submaps_queue.push_back(submap); }
 
+  /**
+   * @brief Global mapping optimization callback
+   *        Here, we inject loop constaints into the global mapping factor graph
+   *
+   * @param isam2
+   * @param new_factors
+   * @param new_values
+   */
   void on_smoother_update(gtsam_ext::ISAM2Ext& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
     if (loop_factors.empty()) {
       return;
@@ -72,9 +104,14 @@ public:
     new_factors.add(factors);
   }
 
+  /**
+   * @brief Loop detection thread
+   *
+   */
   void loop_detection_task() {
     Eigen::Isometry3d last_T_odom_sensor = Eigen::Isometry3d::Identity();
 
+    // Loop
     while (!kill_switch) {
       auto odom_frames = odom_frames_queue.get_all_and_clear();
       auto new_submaps = new_submaps_queue.get_all_and_clear();
@@ -83,9 +120,11 @@ public:
       for (const auto& odom_frame : odom_frames) {
         const Eigen::Isometry3d delta = last_T_odom_sensor.inverse() * odom_frame->T_world_sensor();
         if (delta.translation().norm() < 1.0) {
+          // Do not insert the frame into the ScanContext manager while the sensor is stopping
           continue;
         }
 
+        // Add the current frame into the SC manager
         const int current = frame_count++;
         frame_index_map[current] = odom_frame->id;
         last_T_odom_sensor = odom_frame->T_world_sensor();
@@ -103,15 +142,18 @@ public:
           continue;
         }
 
+        // Detected loops will be validated later
         loop_candidates.push_back(std::make_tuple(current, loop.first, loop.second));
       }
 
+      // Validate loop candidates
       while (!loop_candidates.empty()) {
         const auto loop_candidate = loop_candidates.front();
         const int frame_id1 = frame_index_map[std::get<0>(loop_candidate)];
         const int frame_id2 = frame_index_map[std::get<1>(loop_candidate)];
         const double heading = std::get<2>(loop_candidate);
 
+        // The frame is newer than the latest submap
         if (frame_id1 > submaps.back()->odom_frames.back()->id) {
           break;
         }
@@ -123,9 +165,11 @@ public:
         const auto submap2 = find_submap(frame_id2, T_origin2_frame2);
 
         if (!submap1 || !submap2) {
+          // Failed to find corresponding submaps
           continue;
         }
 
+        // Initial guess for the relative pose between submaps
         Eigen::Isometry3d T_frame1_frame2 = Eigen::Isometry3d::Identity();
         T_frame1_frame2.linear() = Eigen::AngleAxisd(heading, Eigen::Vector3d::UnitZ()).toRotationMatrix();
 
@@ -135,18 +179,23 @@ public:
         }
 
         // TODO: should check if it's close to the current estimate?
-        std::cout << "loop detected!!" << std::endl;
-
+        notify(INFO, "[scan_context] Loop detected!!");
         using gtsam::symbol_shorthand::X;
         const auto noise_model = gtsam::noiseModel::Isotropic::Precision(6, 1e6);
         const auto robust_model = gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Huber::Create(1.0), noise_model);
-
         auto factor = gtsam::make_shared<gtsam::BetweenFactor<gtsam::Pose3>>(X(submap1->id), X(submap2->id), gtsam::Pose3(T_origin1_origin2.matrix()), noise_model);
         loop_factors.push_back(factor);
       }
     }
   }
 
+  /**
+   * @brief Find out the submap corresponding to the $frame_id
+   *
+   * @param frame_id           ID of the frame
+   * @param T_origin_frame     [out] The frame's pose w.r.t. the submap origin
+   * @return SubMap::ConstPtr  Corresponding submap
+   */
   SubMap::ConstPtr find_submap(const int frame_id, Eigen::Isometry3d& T_origin_frame) {
     auto submap = std::lower_bound(submaps.begin(), submaps.end(), frame_id, [=](const SubMap::ConstPtr& submap, const int id) { return submap->frames.back()->id < id; });
     if (submap == submaps.end()) {
@@ -163,6 +212,15 @@ public:
     return (*submap);
   }
 
+  /**
+   * @brief Validate a loop candidate by applying scan matching
+   *
+   * @param frame1              Loop begin frame
+   * @param frame2              Loop end frame
+   * @param T_frame1_frame2     [in/out] Relative pose between frame1 and frame2
+   * @return true               Loop candidate is valid
+   * @return false              Loop candidate is false-positive
+   */
   bool validate_loop(const gtsam_ext::Frame::ConstPtr& frame1, const gtsam_ext::Frame::ConstPtr& frame2, Eigen::Isometry3d& T_frame1_frame2) const {
     gtsam::Values values;
     values.insert(0, gtsam::Pose3::identity());

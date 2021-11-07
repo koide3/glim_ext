@@ -15,6 +15,7 @@
 
 #include <glim/common/callbacks.hpp>
 #include <glim/frontend/callbacks.hpp>
+#include <glim/util/console_colors.hpp>
 #include <glim_ext/util/config_ext.hpp>
 #include <glim/util/concurrent_vector.hpp>
 
@@ -22,6 +23,9 @@ namespace glim {
 
 using gtsam::symbol_shorthand::X;
 
+/*
+ * @brief Estimation result of VIO
+ */
 struct VIOFrame {
 public:
   using Ptr = std::shared_ptr<VIOFrame>;
@@ -38,15 +42,27 @@ public:
   Eigen::Isometry3d T_vodom_base;
 };
 
+/**
+ * @brief Implementation of ORB_SLAM-based visual fontend
+ *
+ */
 class OrbSLAMFrontend::Impl {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+  /**
+   * @brief Construct a new Impl object
+   *
+   * @param use_own_imu_topic     If true, do not subscribe to the default IMU callback
+   * @param use_own_image_topic   If true, do not subscribe to the default image callback
+   */
   Impl(bool use_own_imu_topic, bool use_own_image_topic) {
     glim::Config sensors_config(glim::GlobalConfig::get_config_path("config_sensors"));
     glim::Config sensors_ext_config(glim::GlobalConfigExt::get_config_path("config_sensors_ext"));
     glim::Config orb_slam_config(glim::GlobalConfigExt::get_config_path("config_orb_slam"));
 
+    // Resolve the transformation between camera and base (LiDAR'S IMU) frame
+    // TODO: Use LiDAR frame if odometry estimation is done in the LiDAR frame
     const auto T_lidar_base = sensors_config.param<Eigen::Isometry3d>("sensors", "T_lidar_imu", Eigen::Isometry3d::Identity());
     const auto T_lidar_camera = sensors_ext_config.param<Eigen::Isometry3d>("sensors_ext", "T_lidar_camera", Eigen::Isometry3d::Identity());
     T_base_camera = T_lidar_base.inverse() * T_lidar_camera;
@@ -56,13 +72,16 @@ public:
     const std::string voc_path = data_path + "/" + orb_slam_config.param<std::string>("orb_slam", "voc_path", "orb_slam/ORBvoc.txt");
     const std::string settings_path = "/tmp/orb_slam_settings.yaml";
 
+    // Write the setting file
     write_orb_slam_settings(settings_path, sensors_config, sensors_ext_config, orb_slam_config);
 
+    // Create ORB_SLAM3
     notify(INFO, "[orb_slam] Starting ORB_SLAM...");
     ORB_SLAM3::System::eSensor sensor = enable_imu ? ORB_SLAM3::System::IMU_MONOCULAR : ORB_SLAM3::System::MONOCULAR;
     system.reset(new ORB_SLAM3::System(voc_path, settings_path, sensor, true, 0, "", "", false));
     notify(INFO, "[orb_slam] Ready");
 
+    // Register callbacks
     using std::placeholders::_1;
     using std::placeholders::_2;
     using std::placeholders::_3;
@@ -78,11 +97,16 @@ public:
       OdometryEstimationCallbacks::on_insert_image.add(std::bind(&Impl::on_insert_image, this, _1, _2));
     }
 
+    // Start VIO thread
+    // note: I don't think it's safe to let ORB_SLAM do visualization in another thread
     kill_switch = false;
     num_queued_images = 0;
     thread = std::thread([this] { frontend_task(); });
   }
 
+  /**
+   * @brief Destroy the Impl object
+   */
   ~Impl() {
     kill_switch = true;
     if (thread.joinable()) {
@@ -90,6 +114,14 @@ public:
     }
   }
 
+  /**
+   * @brief Write ORB_SLAM setting to a file
+   *
+   * @param settings_path
+   * @param sensors_config
+   * @param sensors_ext_config
+   * @param orb_slam_config
+   */
   void write_orb_slam_settings(const std::string& settings_path, const glim::Config& sensors_config, const glim::Config& sensors_ext_config, const glim::Config& orb_slam_config) {
     const auto intrinsics = sensors_ext_config.param("sensors_ext", "camera_intrinsics", std::vector<double>());
     const auto dist_model = sensors_ext_config.param<std::string>("sensors_ext", "camera_distortion_model", "pinhole");
@@ -120,7 +152,7 @@ public:
     ofs << "Camera.fy: " << intrinsics[1] << std::endl;
     ofs << "Camera.cx: " << intrinsics[2] << std::endl;
     ofs << "Camera.cy: " << intrinsics[3] << std::endl;
-    // k3?
+
     ofs << "Camera.width: " << image_size[0] << std::endl;
     ofs << "Camera.height: " << image_size[1] << std::endl;
     ofs << "Camera.fps: " << orb_slam_config.param<int>("orb_slam", "image_freq", 10) << std::endl;
@@ -163,36 +195,67 @@ public:
     ofs << "Viewer.ViewpointF: 500" << std::endl;
   }
 
+  /**
+   * @brief IMU input callback
+   *
+   * @param stamp
+   * @param linear_acc
+   * @param angular_vel
+   */
   void on_insert_imu(const double stamp, const Eigen::Vector3d& linear_acc, const Eigen::Vector3d& angular_vel) {
     Eigen::Matrix<double, 7, 1> imu_frame;
     imu_frame << stamp, linear_acc, angular_vel;
     input_imu_queue.push_back(imu_frame);
   }
 
+  /**
+   * @brief Image input callback
+   *
+   * @param stamp
+   * @param image
+   */
   void on_insert_image(const double stamp, const cv::Mat& image) { input_image_queue.push_back(std::make_pair(stamp, image)); }
 
+  /**
+   * @brief Odometry estimation frame callback
+   *
+   * @param frame  Odometry estimation frame
+   */
   void on_new_frame(const EstimationFrame::ConstPtr& frame) {
-    input_odom_frames.push_back(frame);
-
-    if (num_queued_images >= 2) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(num_queued_images * 2));
+    if (frame->frame_id != FrameID::IMU) {
+      std::cerr << console::bold_yellow << "warning: ORB_SLAM module supports only IMU-based frontend" << console::reset << std::endl;
     }
 
+    input_odom_frames.push_back(frame);
+
     while (num_queued_images > 10) {
-      notify(INFO, "[orb_slam] Stopping the frontend");
+      notify(INFO, "[orb_slam] Throttling the frontend");
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
   }
 
+  /**
+   * @brief Optimizer update callback
+   *        Here, we inject ORB_SLAM-based relative pose factors into the odometry estimation factor graph
+   *
+   * @param isam2
+   * @param new_factors
+   * @param new_values
+   */
   void on_smoother_update(gtsam_ext::IncrementalFixedLagSmootherExt& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
     auto factors = new_factors_queue.get_all_and_clear();
     new_factors.add(factors);
   }
 
+  /**
+   * @brief VIO processing thread
+   *
+   */
   void frontend_task() {
     std::deque<std::pair<double, cv::Mat>> image_queue;
     std::deque<Eigen::Matrix<double, 7, 1>, Eigen::aligned_allocator<Eigen::Matrix<double, 7, 1>>> imu_queue;
 
+    // VIO process loop
     while (!kill_switch) {
       auto new_images = input_image_queue.get_all_and_clear();
       auto new_imu_frames = input_imu_queue.get_all_and_clear();
@@ -202,6 +265,7 @@ public:
       imu_queue.insert(imu_queue.end(), new_imu_frames.begin(), new_imu_frames.end());
       odom_frames_queue.insert(odom_frames_queue.end(), new_odom_frames.begin(), new_odom_frames.end());
 
+      // Create VIO-based relative pose factors
       create_vio_factors();
 
       num_queued_images = image_queue.size();
@@ -217,12 +281,14 @@ public:
       cv::Mat gray;
       cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
 
+      // Histogram equalization
       if (clahe) {
         cv::Mat equalized;
         clahe->apply(gray, equalized);
         gray = equalized;
       }
 
+      // Find IMU measurements between image frames
       std::vector<ORB_SLAM3::IMU::Point> imu_measurements;
 
       int imu_cursor = 0;
@@ -235,26 +301,34 @@ public:
         imu_cursor++;
       }
 
+      // Run VIO
       cv::Mat T_camera_vodom;
 
       imu_queue.erase(imu_queue.begin(), imu_queue.begin() + imu_cursor);
       if (enable_imu) {
         T_camera_vodom = system->TrackMonocular(gray, image_stamp, imu_measurements);
       } else {
-        T_camera_vodom = system->TrackMonocular(gray, image_stamp);
+        std::cerr << console::bold_yellow << "warning: [orb_slam] ORB_SLAM frontend supports only Visual-Inertial mode" << console::reset << std::endl;
+        system->TrackMonocular(gray, image_stamp);
       }
 
+      // Invalid VIO result (initializing or relocalizing)
       if (!T_camera_vodom.data) {
         vodom_frames_queue.push_back(VIOFrame::Ptr(new VIOFrame(image_stamp)));
         continue;
       }
 
+      // Transform VIO result into the base frame
       Eigen::Isometry3f T_vodom_camera(Eigen::Matrix<float, 4, 4, Eigen::RowMajor>(reinterpret_cast<float*>(T_camera_vodom.data)).inverse());
       Eigen::Isometry3d T_vodom_base = T_vodom_camera.cast<double>() * T_base_camera.inverse();
       vodom_frames_queue.push_back(VIOFrame::Ptr(new VIOFrame(image_stamp, T_vodom_base)));
     }
   }
 
+  /**
+   * @brief Create relative pose factors from VIO results
+   *
+   */
   void create_vio_factors() {
     if (odom_frames_queue.size() < 2 || vodom_frames_queue.size() < 2) {
       return;
@@ -281,6 +355,7 @@ public:
 
     const auto interpolate = [](const VIOFrame::ConstPtr& f0, const VIOFrame::ConstPtr& f1, const double stamp) {
       if (f0->stamp > stamp || f1->stamp < stamp) {
+        // This never happen
         std::cerr << "invalid state!!!!" << std::endl;
         abort();
       }
@@ -313,6 +388,8 @@ public:
 
       notify(INFO, (boost::format("[orb_slam] new_factor delta:%.3f[m] err_t:%.3f[m] err_r:%.3f[rad]") % displacement % error_trans % error_angle).str());
 
+      // TODO : Filter out bad VIO results by comparing them with LiDAR-based estimates
+      // TODO : Apply robust kernel
       gtsam::Vector6 inf_scale;
       inf_scale << 1e6, 1e6, 1e6, 1e3, 1e3, 1e3;
       auto factor = gtsam::make_shared<gtsam::BetweenFactor<gtsam::Pose3>>(
@@ -323,6 +400,7 @@ public:
       new_factors_queue.push_back(factor);
     }
 
+    // Remove old data
     odom_frames_queue.pop_front();
     vodom_frames_queue.erase(vodom_frames_queue.begin(), vodom_frames_queue.begin() + vodom_right - 1);
     notify(INFO, (boost::format("[orb_slam] odom_queue:%d vodom_queue:%d") % odom_frames_queue.size() % vodom_frames_queue.size()).str());
@@ -337,15 +415,15 @@ private:
   cv::Ptr<cv::CLAHE> clahe;
   std::unique_ptr<ORB_SLAM3::System> system;
 
-  // input queues
+  // Input queues
   ConcurrentVector<std::pair<double, cv::Mat>> input_image_queue;
   ConcurrentVector<Eigen::Matrix<double, 7, 1>, Eigen::aligned_allocator<Eigen::Matrix<double, 7, 1>>> input_imu_queue;
   ConcurrentVector<EstimationFrame::ConstPtr> input_odom_frames;
 
-  // output queue
+  // Output queue
   ConcurrentVector<gtsam::NonlinearFactor::shared_ptr> new_factors_queue;
 
-  // internal queues
+  // Internal queues
   std::deque<EstimationFrame::ConstPtr> odom_frames_queue;
   std::deque<VIOFrame::ConstPtr> vodom_frames_queue;
 
