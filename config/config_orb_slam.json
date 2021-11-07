@@ -1,13 +1,13 @@
 {
   "orb_slam": {
-    "enable_imu": false,
+    "enable_imu": true,
     "enable_clahe": true,
     "voc_path": "orb_slam/ORBvoc.txt",
     "image_freq": 10,
     "imu_freq": 200,
-    "num_features": 2000,
+    "num_features": 3000,
     "scale_factor": 1.2,
-    "nlevels": 8,
+    "nlevels": 12,
     "ini_th_fast": 20,
     "min_th_fast": 7
   }
