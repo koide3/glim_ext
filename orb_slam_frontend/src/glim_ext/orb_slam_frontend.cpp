@@ -32,7 +32,7 @@ public:
 
     notify(INFO, "[orb_slam] Starting ORB_SLAM...");
     ORB_SLAM3::System::eSensor sensor = enable_imu ? ORB_SLAM3::System::IMU_MONOCULAR : ORB_SLAM3::System::MONOCULAR;
-    system.reset(new ORB_SLAM3::System(voc_path, settings_path, sensor, true));
+    system.reset(new ORB_SLAM3::System(voc_path, settings_path, sensor, true, 0, "", "", false));
     notify(INFO, "[orb_slam] Ready");
 
     using std::placeholders::_1;
