@@ -23,14 +23,20 @@ public:
 
   Impl(bool use_own_imu_topic, bool use_own_image_topic) {
     glim::Config config(glim::GlobalConfigExt::get_config_path("config_orb_slam"));
+    enable_imu = config.param<bool>("orb_slam", "enable_imu", true);
     const std::string data_path = glim::GlobalConfigExt::get_data_path();
     const std::string voc_path = data_path + "/" + config.param<std::string>("orb_slam", "voc_path", "orb_slam/ORBvoc.txt");
     const std::string settings_path = "/tmp/orb_slam_settings.yaml";
 
+    if (config.param<bool>("orb_slam", "enable_clahe")) {
+      clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+    }
+
     write_orb_slam_settings(settings_path, config);
 
     notify(INFO, "[orb_slam] Starting ORB_SLAM...");
-    system.reset(new ORB_SLAM3::System(voc_path, settings_path, ORB_SLAM3::System::IMU_MONOCULAR, true));
+    ORB_SLAM3::System::eSensor sensor = enable_imu ? ORB_SLAM3::System::IMU_MONOCULAR : ORB_SLAM3::System::MONOCULAR;
+    system.reset(new ORB_SLAM3::System(voc_path, settings_path, sensor, true));
     notify(INFO, "[orb_slam] Ready");
 
     using std::placeholders::_1;
@@ -84,7 +90,7 @@ public:
     ofs << "Camera.width: " << image_size[0] << std::endl;
     ofs << "Camera.height: " << image_size[1] << std::endl;
     ofs << "Camera.fps: " << orb_slam_config.param<int>("orb_slam", "image_freq", 10) << std::endl;
-    ofs << "Camera.RGB: 1" << std::endl;
+    ofs << "Camera.RGB: 0" << std::endl;
 
     ofs << "Tbc: !!opencv-matrix" << std::endl;
     ofs << "  rows: 4" << std::endl;
@@ -160,8 +166,17 @@ public:
       }
 
       const double image_stamp = image_queue.front().first;
-      const auto image = image_queue.front().second;
+      auto image = image_queue.front().second;
       image_queue.pop_front();
+
+      cv::Mat gray;
+      cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+
+      if (clahe) {
+        cv::Mat equalized;
+        clahe->apply(gray, equalized);
+        gray = equalized;
+      }
 
       std::vector<ORB_SLAM3::IMU::Point> imu_measurements;
 
@@ -176,7 +191,11 @@ public:
       }
 
       imu_queue.erase(imu_queue.begin(), imu_queue.begin() + imu_cursor);
-      cv::Mat T_world_camera = system->TrackMonocular(image, image_stamp, imu_measurements);
+      if (enable_imu) {
+        cv::Mat T_world_camera = system->TrackMonocular(gray, image_stamp, imu_measurements);
+      } else {
+        cv::Mat T_world_camera = system->TrackMonocular(gray, image_stamp);
+      }
 
       // if (!T_world_camera.data) {
       //   image_queue.clear();
@@ -185,11 +204,9 @@ public:
   }
 
 private:
+  bool enable_imu;
+  cv::Ptr<cv::CLAHE> clahe;
   std::unique_ptr<ORB_SLAM3::System> system;
-
-  int imu_freq;
-  int image_freq;
-  int num_features;
 
   ConcurrentVector<std::pair<double, cv::Mat>> input_image_queue;
   ConcurrentVector<Eigen::Matrix<double, 7, 1>, Eigen::aligned_allocator<Eigen::Matrix<double, 7, 1>>> input_imu_queue;
