@@ -3,9 +3,9 @@ project(glim_ext)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" ON)
-option(ENABLE_DBOW "Enable DBoW Loop Detector" ON)
-option(ENABLE_ORBSLAM "Enable ORB-SLAM frontend" ON)
+option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
+option(ENABLE_DBOW "Enable DBoW Loop Detector" OFF)
+option(ENABLE_ORBSLAM "Enable ORB-SLAM frontend" OFF)
 
 add_library(glim_ext
   src/glim_ext/util/config_ext.cpp

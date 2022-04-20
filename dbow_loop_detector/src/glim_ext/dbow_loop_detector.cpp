@@ -1,5 +1,3 @@
-#include <glim_ext/dbow_loop_detector.hpp>
-
 #include <deque>
 #include <atomic>
 #include <thread>
@@ -7,6 +5,8 @@
 #include <opencv2/opencv.hpp>
 
 #include <DBoW3.h>
+
+#define DONT_DEFINE_FRAME_TRAITS
 
 #include <gtsam/inference/Symbol.h>
 #include <gtsam/slam/BetweenFactor.h>
@@ -17,12 +17,13 @@
 #include <glim/backend/callbacks.hpp>
 #include <glim/util/console_colors.hpp>
 #include <glim/util/concurrent_vector.hpp>
+#include <glim/util/extension_module.hpp>
 
 namespace glim {
 
-class DBoWLoopDetector::Impl {
+class DBoWLoopDetector : public ExtensionModule {
 public:
-  Impl() {
+  DBoWLoopDetector() {
     last_image_stamp = std::chrono::high_resolution_clock::now();
     feature_detector = cv::ORB::create(2000);
 
@@ -30,15 +31,15 @@ public:
     using std::placeholders::_1;
     using std::placeholders::_2;
     using std::placeholders::_3;
-    GlobalMappingCallbacks::on_insert_image.add(std::bind(&Impl::on_insert_image, this, _1, _2));
-    GlobalMappingCallbacks::on_insert_submap.add(std::bind(&Impl::on_insert_submap, this, _1));
-    GlobalMappingCallbacks::on_smoother_update.add(std::bind(&Impl::on_smoother_update, this, _1, _2, _3));
+    GlobalMappingCallbacks::on_insert_image.add(std::bind(&DBoWLoopDetector::on_insert_image, this, _1, _2));
+    GlobalMappingCallbacks::on_insert_submap.add(std::bind(&DBoWLoopDetector::on_insert_submap, this, _1));
+    GlobalMappingCallbacks::on_smoother_update.add(std::bind(&DBoWLoopDetector::on_smoother_update, this, _1, _2, _3));
 
     kill_switch = false;
     thread = std::thread([this] { loop_detection_task(); });
   }
 
-  ~Impl() {
+  ~DBoWLoopDetector() {
     kill_switch = true;
     if (thread.joinable()) {
       thread.join();
@@ -74,9 +75,11 @@ public:
   void loop_detection_task() {
     // Create DBoW2 vocabulary
     const std::string voc_path = "/home/koide/voc.yaml.gz";
+    std::cerr << "[DBoW] Loading ORB vocabulary..." << std::endl;
     notify(INFO, "[DBoW] Loading ORB vocabulary...");
     voc.reset(new DBoW3::Vocabulary(voc_path));
     db.reset(new DBoW3::Database(*voc, false, 0));
+    std::cerr << "[DBoW] LORB vocabulary loaded" << std::endl;
     notify(INFO, "[DBoW] ORB vocabulary loaded");
 
     while (!kill_switch) {
@@ -253,10 +256,8 @@ private:
   std::thread thread;
 };
 
-DBoWLoopDetector::DBoWLoopDetector() {
-  impl.reset(new Impl);
-}
-
-DBoWLoopDetector::~DBoWLoopDetector() {}
-
 }  // namespace glim
+
+extern "C" glim::ExtensionModule* create_extension_module() {
+  return new glim::DBoWLoopDetector();
+}

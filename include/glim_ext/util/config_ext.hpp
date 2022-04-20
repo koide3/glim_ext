@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <glim/util/config.hpp>
 
 namespace glim {
@@ -10,8 +11,15 @@ private:
   virtual ~GlobalConfigExt() override {}
 
 public:
-  static GlobalConfigExt* instance(const std::string& config_path = "") {
+  static GlobalConfigExt* instance(std::string config_path = "") {
     if (inst == nullptr) {
+      const auto config_ext_path = GlobalConfig::instance()->param<std::string>("global", "config_ext");
+      if (!config_ext_path) {
+        std::cerr << "warning: failed to find config_ext path!!" << std::endl;
+      } else {
+        config_path = *config_ext_path;
+      }
+
       inst = new GlobalConfigExt(config_path + "/config_global_ext.json");
       inst->override_param("global_ext", "config_path", config_path);
     }

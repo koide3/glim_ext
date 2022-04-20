@@ -1,10 +1,10 @@
-#include <glim_ext/orb_slam_frontend.hpp>
-
 #include <atomic>
 #include <thread>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <boost/format.hpp>
+
 #include <System.h>
 #include <ImuTypes.h>
 
@@ -18,6 +18,7 @@
 #include <glim/util/console_colors.hpp>
 #include <glim_ext/util/config_ext.hpp>
 #include <glim/util/concurrent_vector.hpp>
+#include <glim/util/extension_module.hpp>
 
 namespace glim {
 
@@ -43,20 +44,17 @@ public:
 };
 
 /**
- * @brief Implementation of ORB_SLAM-based visual fontend
+ * @brief ORB_SLAM-based visual fontend constraint
  *
  */
-class OrbSLAMFrontend::Impl {
+class OrbSLAMFrontend : public ExtensionModule {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   /**
-   * @brief Construct a new Impl object
-   *
-   * @param use_own_imu_topic     If true, do not subscribe to the default IMU callback
-   * @param use_own_image_topic   If true, do not subscribe to the default image callback
+   * @brief Construct a new visual frontend constraint instance
    */
-  Impl(bool use_own_imu_topic, bool use_own_image_topic) {
+  OrbSLAMFrontend() {
     glim::Config sensors_config(glim::GlobalConfig::get_config_path("config_sensors"));
     glim::Config sensors_ext_config(glim::GlobalConfigExt::get_config_path("config_sensors_ext"));
     glim::Config orb_slam_config(glim::GlobalConfigExt::get_config_path("config_orb_slam"));
@@ -85,17 +83,11 @@ public:
     using std::placeholders::_1;
     using std::placeholders::_2;
     using std::placeholders::_3;
-    OdometryEstimationCallbacks::on_new_frame.add(std::bind(&Impl::on_new_frame, this, _1));
-    OdometryEstimationCallbacks::on_smoother_update.add(std::bind(&Impl::on_smoother_update, this, _1, _2, _3));
+    OdometryEstimationCallbacks::on_new_frame.add(std::bind(&OrbSLAMFrontend::on_new_frame, this, _1));
+    OdometryEstimationCallbacks::on_smoother_update.add(std::bind(&OrbSLAMFrontend::on_smoother_update, this, _1, _2, _3));
 
-    if (!use_own_imu_topic) {
-      std::cout << "*** use default imu ***" << std::endl;
-      OdometryEstimationCallbacks::on_insert_imu.add(std::bind(&Impl::on_insert_imu, this, _1, _2, _3));
-    }
-    if (!use_own_image_topic) {
-      std::cout << "*** use default image ***" << std::endl;
-      OdometryEstimationCallbacks::on_insert_image.add(std::bind(&Impl::on_insert_image, this, _1, _2));
-    }
+    OdometryEstimationCallbacks::on_insert_imu.add(std::bind(&OrbSLAMFrontend::on_insert_imu, this, _1, _2, _3));
+    OdometryEstimationCallbacks::on_insert_image.add(std::bind(&OrbSLAMFrontend::on_insert_image, this, _1, _2));
 
     // Start VIO thread
     // note: I don't think it's safe to let ORB_SLAM do visualization in another thread
@@ -107,7 +99,7 @@ public:
   /**
    * @brief Destroy the Impl object
    */
-  ~Impl() {
+  ~OrbSLAMFrontend() {
     kill_switch = true;
     if (thread.joinable()) {
       thread.join();
@@ -432,18 +424,8 @@ private:
   std::thread thread;
 };
 
-OrbSLAMFrontend::OrbSLAMFrontend(bool use_own_imu_topic, bool use_own_image_topic) {
-  impl.reset(new Impl(use_own_imu_topic, use_own_image_topic));
-}
-
-OrbSLAMFrontend::~OrbSLAMFrontend() {}
-
-void OrbSLAMFrontend::insert_imu(const double stamp, const Eigen::Vector3d& linear_acc, const Eigen::Vector3d& angular_vel) {
-  impl->on_insert_imu(stamp, linear_acc, angular_vel);
-}
-
-void OrbSLAMFrontend::insert_image(const double stamp, const cv::Mat& image) {
-  impl->on_insert_image(stamp, image);
-}
-
 }  // namespace glim
+
+extern "C" glim::ExtensionModule* create_extension_module() {
+  return new glim::OrbSLAMFrontend();
+}

@@ -1,5 +1,3 @@
-#include <glim_ext/scan_context_loop_detector.hpp>
-
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -22,6 +20,7 @@
 #include <glim/frontend/estimation_frame.hpp>
 #include <glim/backend/sub_map.hpp>
 #include <glim/util/concurrent_vector.hpp>
+#include <glim/util/extension_module.hpp>
 
 #include <glk/pointcloud_buffer.hpp>
 #include <guik/viewer/light_viewer.hpp>
@@ -33,40 +32,42 @@
 namespace glim {
 
 /**
- * @brief Implementation of ScanContext-based loop detector
+ * @brief ScanContext-based loop detector
  * @note  TODO: make some hard-coded parameters configurable
  *
  */
-class ScanContextLoopDetector::Impl {
+class ScanContextLoopDetector : public ExtensionModule {
 public:
   /**
-   * @brief Construct a new Impl object
+   * @brief Construct loop detector
    *
    */
-  Impl() {
+  ScanContextLoopDetector() {
+    std::cerr << "[scan_context] Creating ScanContext manager..." << std::endl;
     notify(INFO, "[scan_context] Creating ScanContext manager...");
     sc.reset(new SCManager);
     sc->SC_DIST_THRES = 0.2;
     notify(INFO, "[scan_context] ScanContext manager created");
+    std::cerr << "[scan_context] ScanContext manager created..." << std::endl;
 
     frame_count = 0;
 
     using std::placeholders::_1;
     using std::placeholders::_2;
     using std::placeholders::_3;
-    OdometryEstimationCallbacks::on_new_frame.add(std::bind(&Impl::on_new_frame, this, _1));
-    GlobalMappingCallbacks::on_insert_submap.add(std::bind(&Impl::on_new_submap, this, _1));
-    GlobalMappingCallbacks::on_smoother_update.add(std::bind(&Impl::on_smoother_update, this, _1, _2, _3));
+    OdometryEstimationCallbacks::on_new_frame.add(std::bind(&ScanContextLoopDetector::on_new_frame, this, _1));
+    GlobalMappingCallbacks::on_insert_submap.add(std::bind(&ScanContextLoopDetector::on_new_submap, this, _1));
+    GlobalMappingCallbacks::on_smoother_update.add(std::bind(&ScanContextLoopDetector::on_smoother_update, this, _1, _2, _3));
 
     kill_switch = false;
     thread = std::thread([this] { loop_detection_task(); });
   }
 
   /**
-   * @brief Destroy the Impl object
+   * @brief Destroy the ScanContextLoopDetector object
    *
    */
-  ~Impl() {
+  ~ScanContextLoopDetector() {
     kill_switch = true;
     if (thread.joinable()) {
       thread.join();
@@ -263,10 +264,8 @@ private:
   std::unique_ptr<SCManager> sc;
 };
 
-ScanContextLoopDetector::ScanContextLoopDetector() {
-  impl.reset(new Impl);
-}
-
-ScanContextLoopDetector::~ScanContextLoopDetector() {}
-
 }  // namespace glim
+
+extern "C" glim::ExtensionModule* create_extension_module() {
+  return new glim::ScanContextLoopDetector();
+}
