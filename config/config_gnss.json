@@ -1,0 +1,6 @@
+{
+  "gnss": {
+    "nmea_topic": "/nmea_sentence",
+    "prior_inf_scale": 1e4
+  }
+}
