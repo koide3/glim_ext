@@ -69,7 +69,7 @@ public:
     });
     */
     OdometryEstimationCallbacks::on_smoother_update.add(
-      [](gtsam_ext::IncrementalFixedLagSmootherExt& smoother, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
+      [](gtsam_ext::IncrementalFixedLagSmootherExt& smoother, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values, gtsam::FixedLagSmootherKeyTimestampMap& new_stamps) {
         std::cout << console::green;
         std::cout << boost::format("--- OdometryEstimation::on_smoother_update (thread:%d) ---") % std::this_thread::get_id() << std::endl;
         std::cout << "smoother:" << smoother.calculateEstimate().size() << " new_factors:" << new_factors.size() << " new_values:" << new_values.size() << std::endl;

@@ -12,6 +12,7 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
+#include <gtsam_unstable/nonlinear/FixedLagSmoother.h>
 
 #include <glim/common/callbacks.hpp>
 #include <glim/frontend/callbacks.hpp>
@@ -83,8 +84,9 @@ public:
     using std::placeholders::_1;
     using std::placeholders::_2;
     using std::placeholders::_3;
+    using std::placeholders::_4;
     OdometryEstimationCallbacks::on_new_frame.add(std::bind(&OrbSLAMFrontend::on_new_frame, this, _1));
-    OdometryEstimationCallbacks::on_smoother_update.add(std::bind(&OrbSLAMFrontend::on_smoother_update, this, _1, _2, _3));
+    OdometryEstimationCallbacks::on_smoother_update.add(std::bind(&OrbSLAMFrontend::on_smoother_update, this, _1, _2, _3, _4));
 
     OdometryEstimationCallbacks::on_insert_imu.add(std::bind(&OrbSLAMFrontend::on_insert_imu, this, _1, _2, _3));
     OdometryEstimationCallbacks::on_insert_image.add(std::bind(&OrbSLAMFrontend::on_insert_image, this, _1, _2));
@@ -234,7 +236,7 @@ public:
    * @param new_factors
    * @param new_values
    */
-  void on_smoother_update(gtsam_ext::IncrementalFixedLagSmootherExt& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
+  void on_smoother_update(gtsam_ext::IncrementalFixedLagSmootherExt& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values, gtsam::FixedLagSmootherKeyTimestampMap& new_stamps) {
     auto factors = new_factors_queue.get_all_and_clear();
     new_factors.add(factors);
   }
