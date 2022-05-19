@@ -7,7 +7,21 @@
 Each module in glim_ext uses several external libraries that employ different licensing conditions. You must carefully check and follow their licenses.
 
 
-## Modules
+## Example Modules
+
+### Callback demo
+- This modules subscribes to all available callbacks to demonstrate how mapping states can be retrieved
+
+## Frontend Modules
+
+### ORB_SLAM frontend
+- Loosely coupled visual frontend constraints based on ORB_SLAM3
+- Dependency: [ORB_SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) (GPL-3.0)
+
+## Backend Modules
+
+### GNSS constraints [ROS1 only]
+- GNSS-based constraints for global optimization
 
 ### ScanContext Loop Detector
 - Explicit loop detection based on ScanContext
@@ -16,10 +30,6 @@ Each module in glim_ext uses several external libraries that employ different li
 ### DBoW Loop Detector
 - Explicit loop detection based on DBoW3
 - Dependency: [DBoW3](https://github.com/rmsalinas/DBow3) ([LICENSE](https://github.com/rmsalinas/DBow3/blob/master/LICENSE.txt))
-
-### ORB_SLAM frontend
-- Loosely coupled visual frontend constraints based on ORB_SLAM3
-- Dependency: [ORB_SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) (GPL-3.0)
 
 
 ## Installation

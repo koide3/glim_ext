@@ -1,5 +1,5 @@
 [submodule "scan_context_loop_detector/thirdparty/scancontext"]
-	path = scan_context_loop_detector/thirdparty/scancontext
+	path = modules/backend/scan_context_loop_detector/thirdparty/scancontext
 	url = https://github.com/koide3/scancontext.git
 [submodule "dbow_loop_detector/thirdparty/DBoW2"]
 	path = dbow_loop_detector/thirdparty/DBoW2
@@ -8,5 +8,5 @@
 	path = dbow_loop_detector/thirdparty/DBoW3
 	url = https://github.com/rmsalinas/DBow3.git
 [submodule "orb_slam_frontend/thirdparty/ORB_SLAM3"]
-	path = orb_slam_frontend/thirdparty/ORB_SLAM3
+	path = modules/frontend/orb_slam_frontend/thirdparty/ORB_SLAM3
 	url = https://github.com/koide3/ORB_SLAM3.git

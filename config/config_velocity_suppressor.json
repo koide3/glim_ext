@@ -1,0 +1,7 @@
+{
+  "velocity_suppressor": {
+    "max_velocity": 1.0,
+    "max_velocity_inf_scale": 100.0,
+    "stationary_prior_inf_scale": 100.0
+  }
+}
