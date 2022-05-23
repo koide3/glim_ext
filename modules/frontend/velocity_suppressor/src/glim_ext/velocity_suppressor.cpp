@@ -34,30 +34,6 @@ public:
     OdometryEstimationCallbacks::on_smoother_update.add(std::bind(&VelocitySuppresor::on_smoother_update, this, _1, _2, _3, _4));
   }
 
-  double determine_kernel_width(const double max_velocity, const double max_velocity_inf_scale) {
-    double kernel_width = 0.0;
-
-    for(double x = 0.0; x < 1.0; x += 1e-2) {
-      const double w = std::pow(1e3 + 1.0, x) - 1.0 + 1e-3;
-
-      auto noise_model = gtsam::noiseModel::Diagonal::Information(max_velocity_inf_scale * gtsam::Matrix3::Identity());
-      auto robust_model = gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::L2WithDeadZone::Create(w), noise_model);
-      auto factor = gtsam::PriorFactor<gtsam::Vector3>(0, gtsam::Vector3::Zero(), robust_model);
-
-      gtsam::Values values;
-      values.insert(0, gtsam::Vector3(max_velocity, 0.0, 0.0));
-
-      const double err = factor.linearize(values)->jacobian().second.squaredNorm();
-      std::cout << "w:" << w << " " << err << std::endl;
-
-      if (err < 1e-3) {
-        break;
-      }
-    }
-
-    return kernel_width;
-  }
-
   void on_new_frame(const EstimationFrame::ConstPtr& frame) {
     using gtsam::symbol_shorthand::V;
 
