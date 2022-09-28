@@ -6,6 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 # Frontend modules
 option(ENABLE_ORBSLAM "Enable ORB-SLAM frontend" OFF)
 option(ENABLE_VELSUPP "Enable Velocity suppressor" ON)
+option(ENABLE_IMUVAL "Enable IMU calibration validator" ON)
 
 # Backend modules
 option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
@@ -43,6 +44,11 @@ endif()
 if(ENABLE_VELSUPP)
   add_subdirectory(modules/frontend/velocity_suppressor)
   list(APPEND glim_ext_LIBRARIES velocity_suppressor)
+endif()
+
+if(ENABLE_IMUVAL)
+  add_subdirectory(modules/frontend/imu_validator)
+  list(APPEND glim_ext_LIBRARIES imu_validator)
 endif()
 
 # Backend modules

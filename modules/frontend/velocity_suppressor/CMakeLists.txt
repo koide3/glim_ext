@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.0.2)
 project(velocity_suppressor)
 
 find_package(glim REQUIRED)
-find_package(glim_ext REQUIRED)
 find_package(GTSAM REQUIRED)
 find_package(Eigen3 REQUIRED)
 
