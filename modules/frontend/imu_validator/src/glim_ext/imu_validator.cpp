@@ -22,6 +22,9 @@ struct ValidationInformation {
   std::vector<Eigen::Vector3f> linear_acc_world;
   std::vector<Eigen::Vector3f> angular_vel_lidar;
   std::vector<Eigen::Vector3f> angular_vel_imu;
+
+  double nid;
+  double imu_t_offset;
 };
 
 class IMUCalibrationValidator : public ExtensionModule {
@@ -102,24 +105,94 @@ private:
       angular_vel_lidar[i] = w;
     }
 
-    auto info = std::make_shared<ValidationInformation>();
+    const auto find_corresponding_imu_data = [&](const double imu_t_offset) {
+      std::vector<int> imu_cursors(frame_window.size());
 
-    int imu_cursor = 0;
+      int imu_cursor = 0;
+      for (int i = 0; i < frame_window.size(); i++) {
+        const auto& frame = frame_window[i];
+        while (imu_cursor < imu_window.size() - 1 &&
+               std::abs(imu_window[imu_cursor + 1][0] + imu_t_offset - frame->stamp) < std::abs(imu_window[imu_cursor][0] + imu_t_offset - frame->stamp)) {
+          imu_cursor++;
+        }
+
+        imu_cursors[i] = imu_cursor;
+      }
+
+      return imu_cursors;
+    };
+
+    auto info = std::make_shared<ValidationInformation>();
+    const auto imu_cursors = find_corresponding_imu_data(0.0);
     for (int i = 0; i < frame_window.size(); i++) {
       const auto& frame = frame_window[i];
-      while (imu_cursor < imu_window.size() - 1 && std::abs(imu_window[imu_cursor + 1][0] - frame->stamp) < std::abs(imu_window[imu_cursor][0] - frame->stamp)) {
-        imu_cursor++;
-      }
-
-      if (imu_cursor == 0 || imu_cursor == imu_window.size() || std::abs(imu_window[imu_cursor][0] - frame->stamp) > 0.1) {
-        continue;
-      }
-
+      const auto& imu = imu_window[imu_cursors[i]];
       info->stamps.emplace_back(frame->stamp);
-      info->linear_acc_world.emplace_back((frame->T_world_imu.linear() * imu_window[imu_cursor].middleRows<3>(1)).cast<float>());
+      info->linear_acc_world.emplace_back((frame->T_world_imu.linear() * imu.middleRows<3>(1)).cast<float>());
       info->angular_vel_lidar.emplace_back(angular_vel_lidar[i].cast<float>());
-      info->angular_vel_imu.emplace_back(imu_window[imu_cursor].middleRows<3>(4).cast<float>());
+      info->angular_vel_imu.emplace_back(imu.middleRows<3>(4).cast<float>());
     }
+
+    const auto calc_nid = [&](const double imu_t_offset) {
+      const auto imu_cursors = find_corresponding_imu_data(imu_t_offset);
+
+      std::vector<double> lidar_w(frame_window.size());
+      std::vector<double> imu_w(frame_window.size());
+
+      double w_max = 0.0;
+      double w_min = std::numeric_limits<double>::max();
+
+      for (int i = 0; i < frame_window.size(); i++) {
+        lidar_w[i] = angular_vel_lidar[i].norm();
+        imu_w[i] = imu_window[imu_cursors[i]].middleRows<3>(4).norm();
+
+        w_max = std::max<double>(w_max, std::max<double>(lidar_w[i], imu_w[i]));
+        w_min = std::min<double>(w_min, std::min<double>(lidar_w[i], imu_w[i]));
+      }
+
+      const int bins = 10;
+      Eigen::VectorXi hist_imu = Eigen::VectorXi::Zero(bins);
+      Eigen::VectorXi hist_lidar = Eigen::VectorXi::Zero(bins);
+      Eigen::MatrixXi hist_joint = Eigen::MatrixXi::Zero(bins, bins);
+
+      for (int i = 0; i < lidar_w.size(); i++) {
+        int bin_lidar = static_cast<int>(bins * (lidar_w[i] - w_min) / (w_max - w_min));
+        int bin_imu = static_cast<int>(bins * (imu_w[i] - w_min) / (w_max - w_min));
+
+        bin_lidar = std::max<int>(0, std::min<int>(bins - 1, bin_lidar));
+        bin_imu = std::max<int>(0, std::min<int>(bins - 1, bin_imu));
+
+        hist_imu[bin_imu]++;
+        hist_lidar[bin_lidar]++;
+        hist_joint(bin_lidar, bin_imu)++;
+      }
+
+      Eigen::VectorXd hist_r = hist_lidar.cast<double>() / imu_w.size();
+      Eigen::VectorXd hist_s = hist_imu.cast<double>() / imu_w.size();
+      Eigen::MatrixXd hist_rs = hist_joint.cast<double>() / imu_w.size();
+
+      double Hr = (-hist_r.array() * (hist_r.array() + 1e-6).log()).sum();
+      double Hs = (-hist_s.array() * (hist_s.array() + 1e-6).log()).sum();
+      double Hrs = (-hist_rs.array() * (hist_rs.array() + 1e-6).log()).sum();
+
+      double MI = Hr + Hs - Hrs;
+      double NID = (Hrs - MI) / Hrs;
+
+      return NID;
+    };
+
+    double best_nid = std::numeric_limits<double>::max();
+    double best_imu_t_offset = 0.0;
+    for (double imu_t_offset = -0.5; imu_t_offset <= 0.5; imu_t_offset += 0.001) {
+      const double nid = calc_nid(imu_t_offset);
+      if (nid < best_nid) {
+        best_nid = nid;
+        best_imu_t_offset = imu_t_offset;
+      }
+    }
+
+    info->nid = best_nid;
+    info->imu_t_offset = best_imu_t_offset;
 
     std::lock_guard<std::mutex> lock(validation_info_mutex);
     validation_info = info;
@@ -128,7 +201,8 @@ private:
   void ui_callback() {
     ImGui::Begin("IMU calibration validation", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-    if (std::lock_guard<std::mutex> lock(ValidationInformation); validation_info && validation_info->stamps.size() > 2) {
+    std::lock_guard<std::mutex> lock(validation_info_mutex);
+    if (validation_info && validation_info->stamps.size() > 2) {
       const auto& stamps = validation_info->stamps;
 
       const auto plot_xyz = [&](const auto& data) {
@@ -179,6 +253,7 @@ private:
         ImPlot::EndPlot();
       }
 
+      ImGui::Text("estimated imu_t_offset:%.3f", validation_info->imu_t_offset);
     } else {
       ImGui::Text("No LiDAR/IMU data for validation!!");
     }
