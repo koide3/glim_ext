@@ -127,7 +127,7 @@ private:
     for (int i = 0; i < frame_window.size(); i++) {
       const auto& frame = frame_window[i];
       const auto& imu = imu_window[imu_cursors[i]];
-      info->stamps.emplace_back(frame->stamp);
+      info->stamps.emplace_back(frame->stamp - frame_window.front()->stamp);
       info->linear_acc_world.emplace_back((frame->T_world_imu.linear() * imu.middleRows<3>(1)).cast<float>());
       info->angular_vel_lidar.emplace_back(angular_vel_lidar[i].cast<float>());
       info->angular_vel_imu.emplace_back(imu.middleRows<3>(4).cast<float>());
