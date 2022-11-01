@@ -50,7 +50,7 @@ public:
   }
 
   void on_smoother_update(
-    gtsam_ext::IncrementalFixedLagSmootherExt& smoother,
+    gtsam_ext::IncrementalFixedLagSmootherExtWithFallback& smoother,
     gtsam::NonlinearFactorGraph& new_factors,
     gtsam::Values& new_values,
     std::map<std::uint64_t, double>& new_stamps) {
