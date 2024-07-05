@@ -4,14 +4,14 @@
 
 #include <opencv2/core.hpp>
 
-#include <gtsam_ext/optimizers/levenberg_marquardt_ext.hpp>
-#include <gtsam_ext/optimizers/incremental_fixed_lag_smoother_ext.hpp>
-#include <gtsam_ext/optimizers/incremental_fixed_lag_smoother_with_fallback.hpp>
+#include <gtsam_points/optimizers/levenberg_marquardt_ext.hpp>
+#include <gtsam_points/optimizers/incremental_fixed_lag_smoother_ext.hpp>
+#include <gtsam_points/optimizers/incremental_fixed_lag_smoother_with_fallback.hpp>
 
-#include <glim/frontend/callbacks.hpp>
-#include <glim/backend/callbacks.hpp>
-#include <glim/util/console_colors.hpp>
+#include <glim/odometry/callbacks.hpp>
+#include <glim/mapping/callbacks.hpp>
 #include <glim/util/extension_module.hpp>
+#include <glim_ext/console_colors.hpp>
 
 namespace glim {
 
@@ -69,13 +69,16 @@ public:
       std::cout << console::reset;
     });
     */
-    OdometryEstimationCallbacks::on_smoother_update.add(
-      [](gtsam_ext::IncrementalFixedLagSmootherExtWithFallback& smoother, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values, gtsam::FixedLagSmootherKeyTimestampMap& new_stamps) {
-        std::cout << console::green;
-        std::cout << boost::format("--- OdometryEstimation::on_smoother_update (thread:%d) ---") % std::this_thread::get_id() << std::endl;
-        std::cout << "smoother:" << smoother.calculateEstimate().size() << " new_factors:" << new_factors.size() << " new_values:" << new_values.size() << std::endl;
-        std::cout << console::reset;
-      });
+    OdometryEstimationCallbacks::on_smoother_update.add([](
+                                                          gtsam_points::IncrementalFixedLagSmootherExtWithFallback& smoother,
+                                                          gtsam::NonlinearFactorGraph& new_factors,
+                                                          gtsam::Values& new_values,
+                                                          gtsam::FixedLagSmootherKeyTimestampMap& new_stamps) {
+      std::cout << console::green;
+      std::cout << boost::format("--- OdometryEstimation::on_smoother_update (thread:%d) ---") % std::this_thread::get_id() << std::endl;
+      std::cout << "smoother:" << smoother.calculateEstimate().size() << " new_factors:" << new_factors.size() << " new_values:" << new_values.size() << std::endl;
+      std::cout << console::reset;
+    });
     OdometryEstimationCallbacks::on_smoother_corruption.add([](double time) {
       std::cout << console::green;
       std::cout << boost::format("--- OdometryEstimation::on_smoother_corruption (thread:%d) ---") % std::this_thread::get_id() << std::endl;
@@ -115,7 +118,7 @@ public:
       std::cout << "factors:" << graph.size() << " values:" << values.size() << std::endl;
       std::cout << console::reset;
     });
-    SubMappingCallbacks::on_optimization_status.add([](const gtsam_ext::LevenbergMarquardtOptimizationStatus& status, const gtsam::Values& values) {
+    SubMappingCallbacks::on_optimization_status.add([](const gtsam_points::LevenbergMarquardtOptimizationStatus& status, const gtsam::Values& values) {
       std::cout << console::blue;
       std::cout << boost::format("--- SubMapping::on_optimization_status (thread:%d) ---") % std::this_thread::get_id() << std::endl;
       std::cout << status.to_string() << std::endl;
@@ -155,13 +158,13 @@ public:
       std::cout << "submaps:" << submaps.size() << std::endl;
       std::cout << console::reset;
     });
-    GlobalMappingCallbacks::on_smoother_update.add([](gtsam_ext::ISAM2Ext& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
+    GlobalMappingCallbacks::on_smoother_update.add([](gtsam_points::ISAM2Ext& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
       std::cout << console::cyan;
       std::cout << boost::format("--- GlobalMapping::on_smoother_update (thread:%d) ---") % std::this_thread::get_id() << std::endl;
       std::cout << "isam2:" << isam2.size() << " new_factors:" << new_factors.size() << " new_values:" << new_values.size() << std::endl;
       std::cout << console::reset;
     });
-    GlobalMappingCallbacks::on_smoother_update_result.add([](gtsam_ext::ISAM2Ext& isam2, const gtsam_ext::ISAM2ResultExt& result) {
+    GlobalMappingCallbacks::on_smoother_update_result.add([](gtsam_points::ISAM2Ext& isam2, const gtsam_points::ISAM2ResultExt& result) {
       std::cout << console::cyan;
       std::cout << boost::format("--- GlobalMapping::on_smoother_update_result (thread:%d) ---") % std::this_thread::get_id() << std::endl;
       std::cout << result.to_string() << std::endl;

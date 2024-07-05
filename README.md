@@ -1,6 +1,8 @@
+**!!!IMPORTANT: This repository constains half-baked proof-of-concept code. They may not be well-maintained and not suitable for practical purposes.**
+
 # glim_ext
 
-***glim_ext*** is a set of extension modules for ***GLIM***, 3D LiDAR mapping framework. With this package, we aim to provide reference implementations that demonstrate how GLIM can be extended through the global callback slot mechanism. Note that this is proof-of-concept code for showing the extensibility of GLIM and may not be well-maintained and not suitable for practical purposes.
+glim_ext is a set of extension modules for GLIM, 3D LiDAR mapping framework. With this package, we aim to provide reference implementations that demonstrate how GLIM can be extended through the global callback slot mechanism. 
 
 ## Disclaimer
 
@@ -12,13 +14,13 @@ Each module in glim_ext uses several external libraries that employ different li
 ### Callback demo
 - This modules subscribes to all available callbacks to demonstrate how mapping states can be retrieved
 
-## Frontend Modules
+## Odometry estimation Modules
 
-### ORB_SLAM frontend
-- Loosely coupled visual frontend constraints based on ORB_SLAM3
+### ORB_SLAM odometry
+- Loosely coupled visual odometry constraints based on ORB_SLAM3
 - Dependency: [ORB_SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) (GPL-3.0)
 
-## Backend Modules
+## Sub and global mapping Modules
 
 ### GNSS constraints [ROS1 only]
 - GNSS-based constraints for global optimization

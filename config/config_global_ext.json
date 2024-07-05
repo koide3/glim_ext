@@ -6,6 +6,7 @@
     "config_sensors_ext": "config_sensors_ext.json",
     "config_scan_context": "config_scan_context.json",
     "config_dbow": "config_dbow.json",
-    "config_orb_slam": "config_orb_slam.json"
+    "config_orb_slam": "config_orb_slam.json",
+    "config_flat_earther": "config_flat_earther.json"
   }
 }
