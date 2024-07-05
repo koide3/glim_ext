@@ -1,4 +1,5 @@
-**!!!IMPORTANT: This repository constains half-baked proof-of-concept code. They may not be well-maintained and not suitable for practical purposes.**
+**!!! This repository constains half-baked code that may not be well-maintained and not suitable for practical purposes. !!!**  
+**!!! We don't have resource to maintain this extension library. If you find an issue, please fix it by yourself and open a PR to share the solution. !!!**
 
 # glim_ext
 
@@ -16,44 +17,53 @@ Each module in glim_ext uses several external libraries that employ different li
 
 ## Odometry estimation Modules
 
-### ORB_SLAM odometry
+### IMU validator
+- Validator for LiDAR-IMU transformation configurations.
+
+### Velocity supressor
+- Regulating the velocity range.
+
+### ORB_SLAM odometry (Not Maintained)
 - Loosely coupled visual odometry constraints based on ORB_SLAM3
 - Dependency: [ORB_SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) (GPL-3.0)
 
-## Sub and global mapping Modules
+## Global Optimization Modules
 
-### GNSS constraints [ROS1 only]
+### Flat earther
+- Forcing the height of proximiate submaps be the same.
+- This is useful in situations only a single floor exists and the height of the sensor from the floor is mostly unchanged.
+
+### GNSS constraints (Not Maintained)
 - GNSS-based constraints for global optimization
 
-### ScanContext Loop Detector
+### ScanContext Loop Detector (Not Maintained)
 - Explicit loop detection based on ScanContext
 - Dependency: [ScanContext](https://github.com/irapkaist/scancontext) (CC BY-NC-SA 4.0)
 
-### DBoW Loop Detector
+### DBoW Loop Detector (Not Maintained)
 - Explicit loop detection based on DBoW3
 - Dependency: [DBoW3](https://github.com/rmsalinas/DBow3) ([LICENSE](https://github.com/rmsalinas/DBow3/blob/master/LICENSE.txt))
-
 
 ## Installation
 
 ### ROS1
 
+**!!! We do not and will not support ROS1. While some modules would still work on ROS1, no tests are conducted. !!!**
+
 ```bash
 cd ~/catkin_ws/src
-git clone glim
-git clone glim_ext
+git clone https://github.com/koide3/glim_ext
 
 cd ..
 catkin_make -DCMAKE_BUILD_TYPE=Release
-
-# optional arguments
-# catkin_make -DENABLE_SCAN_CONTEXT=ON \
-#             -DENABLE_DBOW=ON \
-#             -DENABLE_ORBSLAM=ON
 ```
 
 ### ROS2
 
 ```bash
+cd ~/ros2_ws/src
+git clone https://github.com/koide3/glim_ext
+
+cd ..
 concon build
 ```
