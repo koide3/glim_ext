@@ -1,7 +1,11 @@
 {
+  // To enforce the entire ground to be flat, set "min_travel_distance" to a small value (e.g., 20) and "max_neighbor_distance" to a huge value (e.g., 1e4)
   "flat_earther": {
-    "min_travel_distance": 100.0,
-    "max_neighbor_distance": 5.0,
-    "level_factor_stddev": 1e-3
+    "min_travel_distance": 250.0,
+    "max_neighbor_distance": 50.0,
+    "num_nearest_neighbors": 10,
+    "num_random_neighbors": 10,
+    "level_factor_stddev": 1e-2,
+    "robust_kernel_width": -1.0
   }
 }
