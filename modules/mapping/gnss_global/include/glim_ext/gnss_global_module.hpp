@@ -8,6 +8,7 @@
 
 #include <boost/format.hpp>
 #include <glim/mapping/callbacks.hpp>
+#include <glim/util/logging.hpp>
 #include <glim/util/concurrent_vector.hpp>
 
 #ifdef GLIM_ROS2

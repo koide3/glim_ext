@@ -84,7 +84,6 @@ if(DEFINED ENV{ROS_VERSION})
 
     find_package(ament_cmake REQUIRED)
     ament_target_dependencies(glim_ext glim)
-    # ament_export_include_directories(include)
     ament_export_libraries(${glim_ext_LIBRARIES})
     ament_package()
   elseif($ENV{ROS_VERSION} EQUAL 1)
