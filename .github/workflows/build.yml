@@ -1,4 +1,4 @@
-name: ROS2
+name: EXT
 
 on:
   pull_request:
