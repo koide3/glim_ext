@@ -7,7 +7,6 @@
 #define GLIM_ROS2
 
 #include <boost/format.hpp>
-#include <glim/common/callbacks.hpp>
 #include <glim/mapping/callbacks.hpp>
 #include <glim/util/concurrent_vector.hpp>
 
@@ -37,6 +36,7 @@ using ExtensionModuleBase = glim::ExtensionModuleROS;
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 
+#include <glim/util/logging.hpp>
 #include <glim/util/convert_to_string.hpp>
 #include <glim_ext/util/config_ext.hpp>
 
@@ -53,8 +53,8 @@ class GNSSGlobal : public ExtensionModuleBase {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  GNSSGlobal() {
-    spdlog::info("initializing GNSS global constraints");
+  GNSSGlobal() : logger(create_module_logger("gnss_global")) {
+    logger->info("initializing GNSS global constraints");
     auto global_config = glim::GlobalConfig::instance();
     std::string config_path;
     if (global_config->param<std::string>("global", "config_gnss_global")) {
@@ -63,7 +63,7 @@ public:
       config_path = glim::GlobalConfigExt::get_config_path("config_gnss");
     }
 
-    spdlog::info("gnss_global_config_path={}", config_path);
+    logger->info("gnss_global_config_path={}", config_path);
     glim::Config config(config_path);
     gnss_topic = config.param<std::string>("gnss", "gnss_topic", "/pose_with_cov");
     prior_inf_scale = config.param<Eigen::Vector3d>("gnss", "prior_inf_scale", Eigen::Vector3d(1e3, 1e3, 0.0));
@@ -104,13 +104,13 @@ public:
   void on_smoother_update(gtsam_points::ISAM2Ext& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
     const auto factors = output_factors.get_all_and_clear();
     if (!factors.empty()) {
-      spdlog::debug("insert {} GNSS prior factors", factors.size());
+      logger->debug("insert {} GNSS prior factors", factors.size());
       new_factors.add(factors);
     }
   }
 
   void backend_task() {
-    spdlog::info("starting GNSS global thread");
+    logger->info("starting GNSS global thread");
     std::deque<Eigen::Vector4d> utm_queue;
     std::deque<SubMap::ConstPtr> submap_queue;
 
@@ -140,11 +140,11 @@ public:
 
         const auto right = std::lower_bound(utm_queue.begin(), utm_queue.end(), stamp, [](const Eigen::Vector4d& utm, const double t) { return utm[0] < t; });
         if (right == utm_queue.end() || (right + 1) == utm_queue.end()) {
-          spdlog::warn("invalid condition in GNSS global module!!");
+          logger->warn("invalid condition in GNSS global module!!");
           break;
         }
         const auto left = right - 1;
-        spdlog::debug("submap={:.6f} utm_left={:.6f} utm_right={:.6f}", stamp, (*left)[0], (*right)[0]);
+        logger->debug("submap={:.6f} utm_left={:.6f} utm_right={:.6f}", stamp, (*left)[0], (*right)[0]);
 
         const double tl = (*left)[0];
         const double tr = (*right)[0];
@@ -196,17 +196,17 @@ public:
 
         for (int i = 0; i < submaps.size(); i++) {
           const Eigen::Vector3d gnss = T_world_utm * submap_coords[i].tail<3>();
-          spdlog::debug("submap={} gnss={}", convert_to_string(submaps[i]->T_world_origin.translation().eval()), convert_to_string(gnss));
+          logger->debug("submap={} gnss={}", convert_to_string(submaps[i]->T_world_origin.translation().eval()), convert_to_string(gnss));
         }
 
-        spdlog::info("T_world_utm={}", convert_to_string(T_world_utm));
+        logger->info("T_world_utm={}", convert_to_string(T_world_utm));
         transformation_initialized = true;
       }
 
       // Add translation prior factor
       if (transformation_initialized) {
         const Eigen::Vector3d xyz = T_world_utm * submap_coords.back().tail<3>();
-        spdlog::debug("submap={} gnss={}", convert_to_string(submaps.back()->T_world_origin.translation().eval()), convert_to_string(xyz));
+        logger->debug("submap={} gnss={}", convert_to_string(submaps.back()->T_world_origin.translation().eval()), convert_to_string(xyz));
 
         const auto& submap = submaps.back();
         // note: should use a more accurate information matrix
@@ -234,6 +234,9 @@ private:
 
   bool transformation_initialized;
   Eigen::Isometry3d T_world_utm;
+
+  // Logging
+  std::shared_ptr<spdlog::logger> logger;
 };
 
 }  // namespace glim

@@ -5,6 +5,8 @@ project(dbow_loop_detector)
 # set(CMAKE_C_FLAGS "-march=native ${CMAKE_C_FLAGS}")
 # set(CMAKE_CXX_FLAGS "-march=native ${CMAKE_CXX_FLAGS}")
 
+message(WARNING "This module is not maintained. You should expect that you need several patches to make it work.")
+
 find_package(Boost REQUIRED COMPONENTS filesystem)
 find_package(glim REQUIRED)
 find_package(OpenCV REQUIRED)

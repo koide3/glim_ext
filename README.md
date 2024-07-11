@@ -33,10 +33,10 @@ Each module in glim_ext uses several external libraries that employ different li
 - Forcing the height of proximiate submaps be the same.
 - This is useful in situations only a single floor exists and the height of the sensor from the floor is mostly unchanged.
 
-### GNSS constraints (Not Maintained)
+### GNSS constraints
 - GNSS-based constraints for global optimization
 
-### ScanContext Loop Detector (Not Maintained)
+### ScanContext Loop Detector
 - Explicit loop detection based on ScanContext
 - Dependency: [ScanContext](https://github.com/irapkaist/scancontext) (CC BY-NC-SA 4.0)
 

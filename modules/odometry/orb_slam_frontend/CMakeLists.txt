@@ -4,6 +4,8 @@ project(orb_slam_odometry)
 find_package(glim REQUIRED)
 find_package(GTSAM REQUIRED)
 
+message(WARNING "This module is not maintained. You should expect that you need several patches to make it work.")
+
 add_subdirectory(thirdparty/ORB_SLAM3)
 
 add_library(orb_slam_odometry

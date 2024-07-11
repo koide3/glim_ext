@@ -14,11 +14,11 @@
 #include <gtsam_points/factors/integrated_gicp_factor.hpp>
 #include <gtsam_points/optimizers/levenberg_marquardt_ext.hpp>
 
-#include <glim/common/callbacks.hpp>
 #include <glim/odometry/callbacks.hpp>
 #include <glim/mapping/callbacks.hpp>
 #include <glim/odometry/estimation_frame.hpp>
 #include <glim/mapping/sub_map.hpp>
+#include <glim/util/logging.hpp>
 #include <glim/util/concurrent_vector.hpp>
 #include <glim/util/extension_module.hpp>
 
@@ -42,13 +42,11 @@ public:
    * @brief Construct loop detector
    *
    */
-  ScanContextLoopDetector() {
-    std::cerr << "[scan_context] Creating ScanContext manager..." << std::endl;
-    notify(INFO, "[scan_context] Creating ScanContext manager...");
+  ScanContextLoopDetector() : logger(create_module_logger("scancontext")) {
+    logger->info("Creating ScanContext manager...");
     sc.reset(new SCManager);
     sc->SC_DIST_THRES = 0.2;
-    notify(INFO, "[scan_context] ScanContext manager created");
-    std::cerr << "[scan_context] ScanContext manager created..." << std::endl;
+    logger->info("ScanContext manager created");
 
     frame_count = 0;
 
@@ -170,6 +168,8 @@ public:
           continue;
         }
 
+        logger->info("validate loop candidate=({}, {})", submap1->id, submap2->id);
+
         // Initial guess for the relative pose between submaps
         Eigen::Isometry3d T_frame1_frame2 = Eigen::Isometry3d::Identity();
         T_frame1_frame2.linear() = Eigen::AngleAxisd(heading, Eigen::Vector3d::UnitZ()).toRotationMatrix();
@@ -180,7 +180,7 @@ public:
         }
 
         // TODO: should check if it's close to the current estimate?
-        notify(INFO, "[scan_context] Loop detected!!");
+        logger->info("Loop detected!!");
         using gtsam::symbol_shorthand::X;
         const auto noise_model = gtsam::noiseModel::Isotropic::Precision(6, 1e6);
         const auto robust_model = gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Huber::Create(1.0), noise_model);
@@ -224,11 +224,11 @@ public:
    */
   bool validate_loop(const gtsam_points::PointCloud::ConstPtr& frame1, const gtsam_points::PointCloud::ConstPtr& frame2, Eigen::Isometry3d& T_frame1_frame2) const {
     gtsam::Values values;
-    values.insert(0, gtsam::Pose3::identity());
+    values.insert(0, gtsam::Pose3::Identity());
     values.insert(1, gtsam::Pose3(T_frame1_frame2.matrix()));
 
     gtsam::NonlinearFactorGraph graph;
-    graph.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(0, gtsam::Pose3::identity(), gtsam::noiseModel::Isotropic::Precision(6, 1e6));
+    graph.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(0, gtsam::Pose3::Identity(), gtsam::noiseModel::Isotropic::Precision(6, 1e6));
 
     auto factor = gtsam::make_shared<gtsam_points::IntegratedGICPFactor>(0, 1, frame1, frame2);
     factor->set_num_threads(4);
@@ -237,11 +237,13 @@ public:
     gtsam_points::LevenbergMarquardtExtParams lm_params;
     lm_params.setlambdaInitial(1e-12);
     lm_params.setMaxIterations(5);
-    lm_params.callback = [](const gtsam_points::LevenbergMarquardtOptimizationStatus& status, const gtsam::Values& values) { std::cout << status.to_string() << std::endl; };
+    lm_params.callback = [this](const gtsam_points::LevenbergMarquardtOptimizationStatus& status, const gtsam::Values& values) { logger->info(status.to_string()); };
     gtsam_points::LevenbergMarquardtOptimizerExt optimizer(graph, values, lm_params);
     values = optimizer.optimize();
 
     T_frame1_frame2 = Eigen::Isometry3d(values.at<gtsam::Pose3>(1).matrix());
+
+    logger->debug("inliear_fraction={}", factor->inlier_fraction());
 
     return factor->inlier_fraction() > 0.8;
   }
@@ -262,6 +264,8 @@ private:
   std::thread thread;
 
   std::unique_ptr<SCManager> sc;
+
+  std::shared_ptr<spdlog::logger> logger;
 };
 
 }  // namespace glim

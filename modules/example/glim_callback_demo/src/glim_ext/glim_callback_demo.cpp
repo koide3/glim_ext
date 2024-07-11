@@ -10,6 +10,7 @@
 
 #include <glim/odometry/callbacks.hpp>
 #include <glim/mapping/callbacks.hpp>
+#include <glim/util/logging.hpp>
 #include <glim/util/extension_module.hpp>
 #include <glim_ext/console_colors.hpp>
 

@@ -7,6 +7,7 @@
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 
 #include <glim/util/config.hpp>
+#include <glim/util/logging.hpp>
 #include <glim/util/extension_module.hpp>
 #include <glim/mapping/callbacks.hpp>
 
@@ -22,8 +23,8 @@ using Callbacks = GlobalMappingCallbacks;
 
 class FlatEarther : public ExtensionModule {
 public:
-  FlatEarther() {
-    spdlog::info("Starting flat earther module");
+  FlatEarther() : logger(create_module_logger("flat_earther")) {
+    logger->info("Starting flat earther module");
     auto global_config = glim::GlobalConfig::instance();
 
     std::string config_path;
@@ -32,7 +33,7 @@ public:
     } else {
       config_path = glim::GlobalConfigExt::get_config_path("config_flat_earther");
     }
-    spdlog::info("config_flat_earther:{}", config_path);
+    logger->info("config_flat_earther:{}", config_path);
 
     glim::Config config(config_path);
 
@@ -54,7 +55,7 @@ public:
   ~FlatEarther() {}
 
   void on_insert_submap(const SubMap::ConstPtr& submap) {
-    spdlog::debug("on_insert_submap {}", submap->id);
+    logger->debug("on_insert_submap {}", submap->id);
     double travel_distance = 0.0;
     Eigen::Vector3d last_pos = submap->T_world_origin.translation();
     size_t closest_max_submap_id = std::numeric_limits<size_t>::max();
@@ -95,7 +96,7 @@ public:
         continue;
       }
 
-      spdlog::debug("create level factor between {} and {}", submap->id, k_indices[i]);
+      logger->debug("create level factor between {} and {}", submap->id, k_indices[i]);
       const double dist = std::sqrt(k_sq_dists[i]);
       const double weight = std::exp(-std::pow(2.0 * dist / max_neighbor_distance, 2));
 
@@ -108,7 +109,7 @@ public:
   }
 
   void on_update_submaps(const std::vector<SubMap::Ptr>& submaps) {
-    spdlog::debug("on_update_submaps {}", submaps.size());
+    logger->debug("on_update_submaps {}", submaps.size());
     submap_position_kdtree.reset();
 
     submap_positions.resize(submaps.size());
@@ -119,19 +120,19 @@ public:
     }
 
     submap_position_kdtree.reset(new PositionKdTree(submap_positions.data(), submap_positions.size()));
-    spdlog::debug("on_update_submaps done");
+    logger->debug("on_update_submaps done");
   }
 
   void on_smoother_update(gtsam_points::ISAM2Ext& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
     if (this->new_factors.empty()) {
       return;
     }
-    spdlog::debug("insert {} level factors", this->new_factors.size());
+    logger->debug("insert {} level factors", this->new_factors.size());
     new_factors.add(this->new_factors);
     this->new_factors.resize(0);
   }
 
-public:
+private:
   std::mt19937 mt;
 
   double min_travel_distance;
@@ -147,6 +148,8 @@ public:
   std::unique_ptr<PositionKdTree> submap_position_kdtree;
 
   gtsam::NonlinearFactorGraph new_factors;
+
+  std::shared_ptr<spdlog::logger> logger;
 };
 
 }  // namespace glim

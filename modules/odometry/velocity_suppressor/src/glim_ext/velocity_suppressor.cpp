@@ -7,6 +7,7 @@
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 
 #include <glim/odometry/callbacks.hpp>
+#include <glim/util/logging.hpp>
 #include <glim/util/concurrent_vector.hpp>
 #include <glim/util/extension_module.hpp>
 
@@ -16,8 +17,8 @@ namespace glim {
 
 class VelocitySuppresor : public ExtensionModule {
 public:
-  VelocitySuppresor() {
-    std::cout << "[Velocity Suppressor] Starting..." << std::endl;
+  VelocitySuppresor() : logger(create_module_logger("velsup")) {
+    logger->info("Starting ...");
 
     glim::Config config(glim::GlobalConfigExt::get_config_path("config_velocity_suppressor"));
 
@@ -65,6 +66,8 @@ private:
   double stationary_prior_inf_scale;
 
   gtsam::NonlinearFactorGraph factors;
+
+  std::shared_ptr<spdlog::logger> logger;
 };
 
 }  // namespace glim

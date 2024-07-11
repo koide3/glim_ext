@@ -7,6 +7,7 @@
 #include <gtsam/geometry/Rot3.h>
 
 #include <glim/odometry/callbacks.hpp>
+#include <glim/util/logging.hpp>
 #include <glim/util/extension_module.hpp>
 #include <glim/util/concurrent_vector.hpp>
 
@@ -29,8 +30,8 @@ struct ValidationInformation {
 
 class IMUCalibrationValidator : public ExtensionModule {
 public:
-  IMUCalibrationValidator() {
-    std::cout << "[IMU validator] Starting..." << std::endl;
+  IMUCalibrationValidator() : logger(create_module_logger("imu_valid")) {
+    logger->info("Starting");
 
     window_size = 10.0;
 
@@ -272,6 +273,9 @@ private:
 
   std::mutex validation_info_mutex;
   ValidationInformation::Ptr validation_info;
+
+  // Logger
+  std::shared_ptr<spdlog::logger> logger;
 };
 }  // namespace glim
 
