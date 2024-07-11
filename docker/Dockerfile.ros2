@@ -1,0 +1,9 @@
+FROM koide3/glim_ros2:humble
+
+COPY . /root/ros2_ws/src/glim_ext
+
+WORKDIR /root/ros2_ws
+RUN /bin/bash -c '. /opt/ros/humble/setup.bash; colcon build'
+
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]
