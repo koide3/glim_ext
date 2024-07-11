@@ -33,7 +33,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           tags: koide3/glim_ext:humble
-          file: ${{github.workspace}}/glim_ext/docker/Dockerfile.ros2
+          file: ${{github.workspace}}/docker/Dockerfile.ros2
           context: .
           push: false
 
