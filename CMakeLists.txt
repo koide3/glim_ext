@@ -12,7 +12,7 @@ option(ENABLE_IMUVAL "Enable IMU calibration validator" ON)
 option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
 option(ENABLE_DBOW "Enable DBoW Loop Detector" OFF)
 option(ENABLE_GNSS "Enable GNSS module (ROS2 is not supported)" ON)
-option(ENABLE_FLATEATHER "Enable flat earth assumption module" ON)
+option(ENABLE_FLATEARTHER "Enable flat earth assumption module" ON)
 
 
 find_package(glim REQUIRED)
@@ -67,7 +67,7 @@ if(ENABLE_GNSS)
   list(APPEND glim_ext_LIBRARIES gnss_global)
 endif()
 
-if(ENABLE_FLATEATHER)
+if(ENABLE_FLATEARTHER)
   add_subdirectory(modules/mapping/flat_earther)
   list(APPEND glim_ext_LIBRARIES flat_earther)
 endif()
