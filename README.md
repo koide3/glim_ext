@@ -67,5 +67,5 @@ cd ~/ros2_ws/src
 git clone https://github.com/koide3/glim_ext
 
 cd ..
-concon build
+colcon build
 ```
