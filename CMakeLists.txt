@@ -11,7 +11,7 @@ option(ENABLE_IMUVAL "Enable IMU calibration validator" ON)
 # Local and global mapping modules
 option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
 option(ENABLE_DBOW "Enable DBoW Loop Detector" OFF)
-option(ENABLE_GNSS "Enable GNSS module (ROS2 is not supported)" ON)
+option(ENABLE_GNSS "Enable GNSS module (ROS1 is not supported)" ON)
 option(ENABLE_FLATEARTHER "Enable flat earth assumption module" ON)
 
 #################
