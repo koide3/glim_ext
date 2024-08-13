@@ -25,14 +25,7 @@ class FlatEarther : public ExtensionModule {
 public:
   FlatEarther() : logger(create_module_logger("flat_earther")) {
     logger->info("Starting flat earther module");
-    auto global_config = glim::GlobalConfig::instance();
-
-    std::string config_path;
-    if (global_config->param<std::string>("global", "config_flat_earther")) {
-      config_path = global_config->get_config_path("config_flat_earther");
-    } else {
-      config_path = glim::GlobalConfigExt::get_config_path("config_flat_earther");
-    }
+    const std::string config_path = glim::GlobalConfigExt::get_config_path("config_flat_earther");
     logger->info("config_flat_earther:{}", config_path);
 
     glim::Config config(config_path);

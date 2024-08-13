@@ -56,15 +56,9 @@ public:
 
   GNSSGlobal() : logger(create_module_logger("gnss_global")) {
     logger->info("initializing GNSS global constraints");
-    auto global_config = glim::GlobalConfig::instance();
-    std::string config_path;
-    if (global_config->param<std::string>("global", "config_gnss_global")) {
-      config_path = global_config->get_config_path("config_gnss_global");
-    } else {
-      config_path = glim::GlobalConfigExt::get_config_path("config_gnss");
-    }
-
+    const std::string config_path = glim::GlobalConfigExt::get_config_path("config_gnss_global");
     logger->info("gnss_global_config_path={}", config_path);
+
     glim::Config config(config_path);
     gnss_topic = config.param<std::string>("gnss", "gnss_topic", "/pose_with_cov");
     prior_inf_scale = config.param<Eigen::Vector3d>("gnss", "prior_inf_scale", Eigen::Vector3d(1e3, 1e3, 0.0));
