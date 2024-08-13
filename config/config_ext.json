@@ -1,0 +1,17 @@
+{
+  /*** GlobalExt Configuration ***/
+  "global_ext": {
+    "config_path": "",
+    "data_path": "../data",
+    // common
+    "config_sensors_ext": "config_sensors_ext.json",
+    // odometry
+    "config_velocity_suppressor": "config_velocity_suppressor.json",
+    "config_orb_slam": "config_orb_slam.json",
+    // mapping
+    "config_flat_earther": "config_flat_earther.json",
+    "config_gnss_global": "config_gnss_global.json",
+    "config_scan_context": "config_scan_context.json",
+    "config_dbow": "config_dbow.json"
+  }
+}

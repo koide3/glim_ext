@@ -20,7 +20,7 @@ public:
         config_path = *config_ext_path;
       }
 
-      inst = new GlobalConfigExt(config_path + "/config_global_ext.json");
+      inst = new GlobalConfigExt(config_path + "/config_ext.json");
       inst->override_param("global_ext", "config_path", config_path);
     }
     return inst;
@@ -34,7 +34,12 @@ public:
   }
 
   static std::string get_config_path(const std::string& config_name) {
-    auto config = instance();
+    const auto global_config = GlobalConfig::instance();
+    if (global_config->param<std::string>("global", config_name)) {
+      return global_config->get_config_path(config_name);
+    }
+
+    const auto config = instance();
     const std::string directory = config->param<std::string>("global_ext", "config_path", ".");
     const std::string filename = config->param<std::string>("global_ext", config_name, config_name + ".json");
     return directory + "/" + filename;
@@ -42,4 +47,4 @@ public:
 
   static GlobalConfigExt* inst;
 };
-}
+}  // namespace glim

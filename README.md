@@ -12,6 +12,16 @@ glim_ext is a set of extension modules for [GLIM](https://github.com/koide3/glim
 Each module in glim_ext uses several external libraries that employ different licensing conditions. You must carefully check and follow their licenses.
 
 
+## Config path addressing
+
+Extension modules first try to find the corresponding config path from `config.json` in the main GLIM package. It then fallback to `config_ext.json` in the `glim_ext` package if it failed to find a config path in `config.json`.
+
+Example (`libflat_earther.so`):
+
+1. Tries to find `config_flat_earther` in `glim/config/config.json`. The config path may be changed by `config_path` ROS param (see [here](https://koide3.github.io/glim/quickstart.html#configuration-files)).
+2. If not found, find `config_flat_earther` in `glim_ext/config/config_ext.json`.
+
+
 ## Example Modules
 
 ### Callback demo

@@ -83,7 +83,40 @@ if(ENABLE_FLATEARTHER)
   list(APPEND glim_ext_LIBRARIES flat_earther)
 endif()
 
-install(TARGETS ${glim_ext_LIBRARIES})
+#############
+## Install ##
+#############
+
+if(DEFINED ENV{ROS_VERSION})
+  if($ENV{ROS_VERSION} EQUAL 1)
+    # No idea
+    set(CMAKE_INSTALL_INCLUDEDIR "include/glim")
+    set(CMAKE_INSTALL_LIBDIR "lib")
+    set(CMAKE_INSTALL_BINDIR "bin/glim")
+    set(CMAKE_INSTALL_DATADIR "share/glim")
+    set(CMAKE_CONFIG_INSTALL_DIR "share/glim")
+  elseif($ENV{ROS_VERSION} EQUAL 2)
+    set(CMAKE_INSTALL_INCLUDEDIR "include/glim")
+    set(CMAKE_INSTALL_LIBDIR "lib")
+    set(CMAKE_INSTALL_BINDIR "bin/glim")
+    set(CMAKE_INSTALL_DATADIR "share/glim")
+    set(CMAKE_CONFIG_INSTALL_DIR "share/glim")
+  else()
+    message(FATAL_ERROR "Unsupported ROS version")
+  endif()
+else()
+  include(GNUInstallDirs)
+  set(CMAKE_CONFIG_INSTALL_DIR
+    "${CMAKE_INSTALL_LIBDIR}/cmake/glim"
+    CACHE PATH "Install directory for CMake config files"
+  )
+endif()
+
+install(TARGETS ${glim_ext_LIBRARIES}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
 #################
 ## ROS-related ##
