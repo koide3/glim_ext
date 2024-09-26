@@ -13,6 +13,7 @@ option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
 option(ENABLE_DBOW "Enable DBoW Loop Detector" OFF)
 option(ENABLE_GNSS "Enable GNSS module (ROS1 is not supported)" ON)
 option(ENABLE_FLATEARTHER "Enable flat earth assumption module" ON)
+option(ENABLE_EAPM_PATHPLANNER "Enable E-APM Path Planner" ON)
 
 #################
 ## ROS-related ##
@@ -60,6 +61,11 @@ endif()
 if(ENABLE_IMUVAL)
   add_subdirectory(modules/odometry/imu_validator)
   list(APPEND glim_ext_LIBRARIES imu_validator)
+endif()
+
+if(ENABLE_EAPM_PATHPLANNER)
+  add_subdirectory(modules/odometry/eapm_path_planner)
+  list(APPEND glim_ext_LIBRARIES eapm_path_planner)
 endif()
 
 # Local and global mapping modules
