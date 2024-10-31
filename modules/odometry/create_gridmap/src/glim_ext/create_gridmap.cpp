@@ -21,8 +21,6 @@
 #include <glim/util/extension_module.hpp>
 #include <glim/util/concurrent_vector.hpp>
 
-#include <opencv2/opencv.hpp>
-
 namespace glim {
 
 class GridmapExtensionModule : public ExtensionModule {
@@ -40,9 +38,7 @@ private:
   void process_submaps(const std::vector<SubMap::Ptr>& submaps);
 
   void update_gridmap(const std::vector<Eigen::Vector4d>& points);
-  static void visualize_gridmap(const Eigen::MatrixXi& gridmap);
 
-  // Gridmap parameters
   Eigen::MatrixXi gridmap_;
   int grid_x_;
   int grid_y_;
@@ -52,11 +48,9 @@ private:
   double cell_size_y_;
   std::string gridmap_frame_id_;
 
-  // ROS2 publisher
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>> gridmap_pub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
-  // Threading
   std::atomic_bool running_;
   std::thread thread_;
   std::thread publisher_thread_;
@@ -147,12 +141,6 @@ void GridmapExtensionModule::task() {
         process_submaps(submaps);
       }
     }
-
-    // Visualize gridmap
-    {
-      std::lock_guard<std::mutex> lock(gridmap_mutex_);
-      visualize_gridmap(gridmap_);
-    }
   }
 }
 
@@ -163,15 +151,16 @@ void GridmapExtensionModule::publish_gridmap() {
     // Publish gridmap to ROS2
     if (gridmap_pub_->get_subscription_count() > 0) {
       nav_msgs::msg::OccupancyGrid occupancy_grid;
-      occupancy_grid.header.frame_id = gridmap_frame_id_;
+      occupancy_grid.header.frame_id = gridmap_frame_id_;  // Set to "map" frame
       occupancy_grid.header.stamp = rclcpp::Clock().now();
 
       occupancy_grid.info.resolution = cell_size_x_;  // Cell size in meters
       occupancy_grid.info.width = grid_x_;
       occupancy_grid.info.height = grid_y_;
 
-      occupancy_grid.info.origin.position.x = 0.0;
-      occupancy_grid.info.origin.position.y = 0.0;
+      // Set origin in map frame, centered at map origin
+      occupancy_grid.info.origin.position.x = -space_x_ / 2.0;
+      occupancy_grid.info.origin.position.y = -space_y_ / 2.0;
       occupancy_grid.info.origin.position.z = 0.0;
       occupancy_grid.info.origin.orientation.w = 1.0;
 
@@ -243,22 +232,6 @@ void GridmapExtensionModule::update_gridmap(const std::vector<Eigen::Vector4d>& 
       gridmap_(y, x) = 1;
     }
   }
-}
-
-void GridmapExtensionModule::visualize_gridmap(const Eigen::MatrixXi& gridmap) {
-  int width = gridmap.cols();
-  int height = gridmap.rows();
-  cv::Mat image(height, width, CV_8UC3);
-  for (int y = 0; y < height; ++y) {
-    for (int x = 0; x < width; ++x) {
-      auto value = static_cast<uchar>(gridmap(y, x) * 255.0F);
-      image.at<cv::Vec3b>(y, x) = cv::Vec3b(value, value, value);
-    }
-  }
-  cv::namedWindow("Gridmap Visualization", cv::WINDOW_NORMAL);
-  cv::resizeWindow("Gridmap Visualization", width, height);
-  cv::imshow("Gridmap Visualization", image);
-  cv::waitKey(1);
 }
 
 }  // namespace glim

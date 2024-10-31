@@ -6,7 +6,6 @@ find_package(glim REQUIRED)
 find_package(GTSAM REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Iridescence REQUIRED)
-find_package(OpenCV REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -31,7 +30,6 @@ target_link_libraries(create_gridmap
   ${glim_LIBRARIES}
   ${glim_ext_LIBRARIES}
   ${Iridescence_LIBRARIES}
-  ${OpenCV_LIBS}
   ${rclcpp_LIBRARIES}
   ${nav_msgs_LIBRARIES}
   ${tf2_ros_LIBRARIES}
@@ -46,7 +44,6 @@ ament_target_dependencies(create_gridmap
   GTSAM
   Eigen3
   Iridescence
-  OpenCV
   rclcpp
   nav_msgs
   tf2_ros
@@ -63,7 +60,6 @@ ament_export_dependencies(
   GTSAM
   Eigen3
   Iridescence
-  OpenCV
   rclcpp
   nav_msgs
   tf2_ros
