@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>eapm_path_planner</name>
+  <name>create_gridmap</name>
   <version>0.0.1</version>
-  <description>Path planner module for eapm</description>
-  <maintainer email="your_email@example.com">Your Name</maintainer>
+  <description>This package's node create GridMap from Glim's submap and current 10 frame point clouds.</description>
+  <maintainer email="m.izumita@aist.go.jp">Masashi Izumita</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

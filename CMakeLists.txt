@@ -64,8 +64,8 @@ if(ENABLE_IMUVAL)
 endif()
 
 if(ENABLE_EAPM_PATHPLANNER)
-  add_subdirectory(modules/odometry/eapm_path_planner)
-  list(APPEND glim_ext_LIBRARIES eapm_path_planner)
+  add_subdirectory(modules/odometry/create_gridmap)
+  list(APPEND glim_ext_LIBRARIES create_gridmap)
 endif()
 
 # Local and global mapping modules
