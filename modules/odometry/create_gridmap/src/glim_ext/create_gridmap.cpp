@@ -46,6 +46,8 @@ private:
   double space_y_;
   double cell_size_x_;
   double cell_size_y_;
+  double lower_bound_for_pt_z_;
+  double upper_bound_for_pt_z_;
   std::string gridmap_frame_id_;
 
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>> gridmap_pub_;
@@ -81,6 +83,8 @@ GridmapExtensionModule::GridmapExtensionModule()
   space_y_ = 60.0;
   cell_size_x_ = space_x_ / grid_x_;
   cell_size_y_ = space_y_ / grid_y_;
+  lower_bound_for_pt_z_ = 1;
+  upper_bound_for_pt_z_ = 2;
   gridmap_ = Eigen::MatrixXi::Zero(grid_y_, grid_x_);
 
   // Register callbacks
@@ -186,7 +190,7 @@ void GridmapExtensionModule::process_frame(const EstimationFrame::ConstPtr& new_
   }
   std::vector<Eigen::Vector4d> filtered_points;
   for (const auto& pt : transformed_points) {
-    if (pt.z() >= 0.3 && pt.z() <= 2.0) {
+    if (pt.z() >= lower_bound_for_pt_z_ && pt.z() <= upper_bound_for_pt_z_) {
       filtered_points.push_back(pt);
     }
   }
@@ -212,7 +216,7 @@ void GridmapExtensionModule::process_submaps(const std::vector<SubMap::Ptr>& sub
     for (size_t i = 0; i < submap->frame->size(); i++) {
       const Eigen::Vector4d& pt_local = submap->frame->points[i];
       Eigen::Vector4d pt_world = t_world_submap * pt_local;
-      if (pt_world.z() >= 2.3 && pt_world.z() <= 3.2) {
+      if (pt_world.z() >= lower_bound_for_pt_z_ && pt_world.z() <= upper_bound_for_pt_z_) {
         submap_points.push_back(pt_world);
       }
     }
