@@ -230,8 +230,8 @@ void GridmapExtensionModule::process_submaps(const std::vector<SubMap::Ptr>& sub
 
 void GridmapExtensionModule::update_gridmap(const std::vector<Eigen::Vector4d>& points) {
   for (const Eigen::Vector4d& pt : points) {
-    int x = static_cast<int>(pt.x() / cell_size_x_ + (grid_x_ / 2.0));
-    int y = static_cast<int>(grid_y_ - (pt.y() / cell_size_y_ + (grid_y_ / 2.0)));
+    int x = static_cast<int>((pt.x() / cell_size_x_) + (grid_x_ / 2.0));
+    int y = static_cast<int>((pt.y() / cell_size_y_) + (grid_y_ / 2.0));
     if (x >= 0 && x < grid_x_ && y >= 0 && y < grid_y_) {
       gridmap_(y, x) = 1;
     }
