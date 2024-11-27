@@ -153,7 +153,7 @@ public:
         const double heading = std::get<2>(loop_candidate);
 
         // The frame is newer than the latest submap
-        if (frame_id1 > submaps.back()->odom_frames.back()->id) {
+        if (frame_id1 > submaps.back()->id) {
           break;
         }
         loop_candidates.pop_front();
