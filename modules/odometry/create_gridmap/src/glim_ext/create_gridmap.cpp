@@ -57,17 +57,13 @@ private:
   std::thread thread_;
   std::thread publisher_thread_;
 
-  // Input queues
   ConcurrentVector<EstimationFrame::ConstPtr> frame_queue_;
   ConcurrentVector<std::vector<SubMap::Ptr>> submap_queue_;
 
-  // Deques for processing
   std::deque<std::vector<Eigen::Vector4d>> SensorframeDataDeque_;
 
-  // Mutex for gridmap
   std::mutex gridmap_mutex_;
 
-  // Logger
   std::shared_ptr<spdlog::logger> logger_;
 };
 
@@ -76,6 +72,8 @@ GridmapExtensionModule::GridmapExtensionModule()
   logger_->info("Starting GridmapExtensionModule");
 
   // Initialize gridmap parameters
+  // TODO(Izumita): Load parameters from ROS2 parameter server and use "resolution"
+  // TODO(Izumita): Implement a gridmap origin
   gridmap_frame_id_ = "odom";
   grid_x_ = 500;
   grid_y_ = 300;
@@ -87,22 +85,18 @@ GridmapExtensionModule::GridmapExtensionModule()
   upper_bound_for_pt_z_ = 2;
   gridmap_ = Eigen::MatrixXi::Zero(grid_y_, grid_x_);
 
-  // Register callbacks
   OdometryEstimationCallbacks::on_new_frame.add(
     [this](const EstimationFrame::ConstPtr& frame) { on_new_frame(frame); });
   GlobalMappingCallbacks::on_update_submaps.add(
     [this](const std::vector<SubMap::Ptr>& submaps) { on_update_submaps(submaps); });
 
-  // ROS2 Publisher
   auto node = rclcpp::Node::make_shared("gridmap_publisher_node");
-  gridmap_pub_ = node->create_publisher<nav_msgs::msg::OccupancyGrid>("gridmap", 10);
+  gridmap_pub_ = node->create_publisher<nav_msgs::msg::OccupancyGrid>("slam_gridmap", 10);
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node);
 
-  // Start the processing thread
   running_ = true;
   thread_ = std::thread([this] { task(); });
 
-  // Start gridmap publishing thread
   publisher_thread_ = std::thread([this] { publish_gridmap(); });
 }
 
@@ -155,10 +149,10 @@ void GridmapExtensionModule::publish_gridmap() {
     // Publish gridmap to ROS2
     if (gridmap_pub_->get_subscription_count() > 0) {
       nav_msgs::msg::OccupancyGrid occupancy_grid;
-      occupancy_grid.header.frame_id = gridmap_frame_id_;  // Set to "map" frame
+      occupancy_grid.header.frame_id = gridmap_frame_id_;
       occupancy_grid.header.stamp = rclcpp::Clock().now();
 
-      occupancy_grid.info.resolution = cell_size_x_;  // Cell size in meters
+      occupancy_grid.info.resolution = cell_size_x_;
       occupancy_grid.info.width = grid_x_;
       occupancy_grid.info.height = grid_y_;
 
@@ -183,6 +177,8 @@ void GridmapExtensionModule::publish_gridmap() {
   }
 }
 
+// TODO(Izumita): ここを改善する。座標変換いちいち挟まない?
+// いやそれ無理じゃない。これは消すだけにして、Path_planner側でリアルタイム点群を受け取って移動に影響させるようにするか。
 void GridmapExtensionModule::process_frame(const EstimationFrame::ConstPtr& new_frame) {
   std::vector<Eigen::Vector4d> transformed_points(new_frame->frame->size());
   for (size_t i = 0; i < new_frame->frame->size(); i++) {
