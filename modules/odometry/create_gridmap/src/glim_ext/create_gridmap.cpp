@@ -39,15 +39,15 @@ private:
 
   void update_gridmap(const std::vector<Eigen::Vector4d>& points);
 
-  Eigen::MatrixXi gridmap_;
-  int grid_x_;
-  int grid_y_;
-  double space_x_;
-  double space_y_;
-  double cell_size_x_;
-  double cell_size_y_;
-  double lower_bound_for_pt_z_;
-  double upper_bound_for_pt_z_;
+  std::vector<int> gridmap_data_;
+  int grid_width_;  // gridmapの幅。gridmapのセルがいくつ横にあるか
+  int grid_height_;  // gridmapの高さ。gridmapのセルがいくつ縦にあるか
+  float gridmap_origin_x_;  // gridmapの原点[m]。ワールド座標系に対応する。
+  // 原点はGridmapの左下の点。それがワールド座標系のどこに位置するか。
+  float gridmap_origin_y_;  // gridmapの原点[m]。ワールド座標系に対応する。
+  float resolution_;  // Gridmap 1セルの高さ(幅)。1セルは正方形。
+  float lower_bound_for_pt_z_;  // Gridmapに入れる点の高さ方向のフィルタリング。最低高さ。
+  float upper_bound_for_pt_z_;  // 最高高さ。
   std::string gridmap_frame_id_;
 
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>> gridmap_pub_;
@@ -57,17 +57,13 @@ private:
   std::thread thread_;
   std::thread publisher_thread_;
 
-  // Input queues
   ConcurrentVector<EstimationFrame::ConstPtr> frame_queue_;
   ConcurrentVector<std::vector<SubMap::Ptr>> submap_queue_;
 
-  // Deques for processing
   std::deque<std::vector<Eigen::Vector4d>> SensorframeDataDeque_;
 
-  // Mutex for gridmap
   std::mutex gridmap_mutex_;
 
-  // Logger
   std::shared_ptr<spdlog::logger> logger_;
 };
 
@@ -75,34 +71,29 @@ GridmapExtensionModule::GridmapExtensionModule()
 : logger_(create_module_logger("gridmap_extension")) {
   logger_->info("Starting GridmapExtensionModule");
 
-  // Initialize gridmap parameters
   gridmap_frame_id_ = "odom";
-  grid_x_ = 500;
-  grid_y_ = 300;
-  space_x_ = 100.0;
-  space_y_ = 60.0;
-  cell_size_x_ = space_x_ / grid_x_;
-  cell_size_y_ = space_y_ / grid_y_;
-  lower_bound_for_pt_z_ = 1;
-  upper_bound_for_pt_z_ = 2;
-  gridmap_ = Eigen::MatrixXi::Zero(grid_y_, grid_x_);
+  grid_width_ = 100;  // gridmapの幅。gridmapのセルがいくつ横にあるか
+  grid_height_ = 100;  // gridmapの高さ。gridmapのセルがいくつ縦にあるか
+  // 原点はGridmapの左下の点。それがワールド座標系のどこに位置するか。
+  gridmap_origin_x_ = -25.0F;  // gridmapの原点[m]。ワールド座標系に対応する。
+  gridmap_origin_y_ = -25.0F;  // gridmapの原点[m]。ワールド座標系に対応する。
+  resolution_ = 0.5F;  // Gridmap 1セルの高さ[m](幅)。1セルは正方形。
+  lower_bound_for_pt_z_ = 1;  // Gridmapに入れる点の高さ方向のフィルタリング。最低高さ。
+  upper_bound_for_pt_z_ = 2;  // 最高高さ。
+  gridmap_data_ = std::vector<int>(grid_width_ * grid_height_, 0);
 
-  // Register callbacks
   OdometryEstimationCallbacks::on_new_frame.add(
     [this](const EstimationFrame::ConstPtr& frame) { on_new_frame(frame); });
   GlobalMappingCallbacks::on_update_submaps.add(
     [this](const std::vector<SubMap::Ptr>& submaps) { on_update_submaps(submaps); });
 
-  // ROS2 Publisher
   auto node = rclcpp::Node::make_shared("gridmap_publisher_node");
-  gridmap_pub_ = node->create_publisher<nav_msgs::msg::OccupancyGrid>("gridmap", 10);
+  gridmap_pub_ = node->create_publisher<nav_msgs::msg::OccupancyGrid>("slam_gridmap", 10);
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node);
 
-  // Start the processing thread
   running_ = true;
   thread_ = std::thread([this] { task(); });
 
-  // Start gridmap publishing thread
   publisher_thread_ = std::thread([this] { publish_gridmap(); });
 }
 
@@ -152,29 +143,27 @@ void GridmapExtensionModule::publish_gridmap() {
   while (running_) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    // Publish gridmap to ROS2
     if (gridmap_pub_->get_subscription_count() > 0) {
       nav_msgs::msg::OccupancyGrid occupancy_grid;
-      occupancy_grid.header.frame_id = gridmap_frame_id_;  // Set to "map" frame
+      occupancy_grid.header.frame_id = gridmap_frame_id_;
       occupancy_grid.header.stamp = rclcpp::Clock().now();
 
-      occupancy_grid.info.resolution = cell_size_x_;  // Cell size in meters
-      occupancy_grid.info.width = grid_x_;
-      occupancy_grid.info.height = grid_y_;
+      occupancy_grid.info.resolution = resolution_;
+      occupancy_grid.info.width = grid_width_;
+      occupancy_grid.info.height = grid_height_;
 
-      // Set origin in map frame, centered at map origin
-      occupancy_grid.info.origin.position.x = -space_x_ / 2.0;
-      occupancy_grid.info.origin.position.y = -space_y_ / 2.0;
+      occupancy_grid.info.origin.position.x = gridmap_origin_x_;
+      occupancy_grid.info.origin.position.y = gridmap_origin_y_;
       occupancy_grid.info.origin.position.z = 0.0;
       occupancy_grid.info.origin.orientation.w = 1.0;
 
+      occupancy_grid.data.resize(grid_width_ * grid_height_);
       {
         std::lock_guard<std::mutex> lock(gridmap_mutex_);
-        occupancy_grid.data.resize(grid_x_ * grid_y_);
-        for (int y = 0; y < grid_y_; ++y) {
-          for (int x = 0; x < grid_x_; ++x) {
-            int index = y * grid_x_ + x;
-            occupancy_grid.data[index] = gridmap_(y, x) == 1 ? 100 : 0;
+        for (int y = 0; y < grid_height_; ++y) {
+          for (int x = 0; x < grid_width_; ++x) {
+            int index = y * grid_width_ + x;
+            occupancy_grid.data[index] = gridmap_data_[index];
           }
         }
       }
@@ -183,6 +172,8 @@ void GridmapExtensionModule::publish_gridmap() {
   }
 }
 
+// TODO(Izumita): ここを改善する。座標変換いちいち挟まない?
+// いやそれ無理じゃない。これは消すだけにして、Path_planner側でリアルタイム点群を受け取って移動に影響させるようにするか。
 void GridmapExtensionModule::process_frame(const EstimationFrame::ConstPtr& new_frame) {
   std::vector<Eigen::Vector4d> transformed_points(new_frame->frame->size());
   for (size_t i = 0; i < new_frame->frame->size(); i++) {
@@ -223,17 +214,18 @@ void GridmapExtensionModule::process_submaps(const std::vector<SubMap::Ptr>& sub
   }
   {
     std::lock_guard<std::mutex> lock(gridmap_mutex_);
-    gridmap_.setZero();
+    std::fill(gridmap_data_.begin(), gridmap_data_.end(), 0);
     update_gridmap(submap_points);
   }
 }
 
 void GridmapExtensionModule::update_gridmap(const std::vector<Eigen::Vector4d>& points) {
   for (const Eigen::Vector4d& pt : points) {
-    int x = static_cast<int>((pt.x() / cell_size_x_) + (grid_x_ / 2.0));
-    int y = static_cast<int>((pt.y() / cell_size_y_) + (grid_y_ / 2.0));
-    if (x >= 0 && x < grid_x_ && y >= 0 && y < grid_y_) {
-      gridmap_(y, x) = 1;
+    int x = static_cast<int>((pt.x() - gridmap_origin_x_ ) / resolution_);
+    int y = static_cast<int>((pt.y() - gridmap_origin_y_ ) / resolution_);
+    if (x >= 0 && x < grid_width_ && y >= 0 && y < grid_height_) {
+      int index = y * grid_width_ + x;
+      gridmap_data_[index] = 100;
     }
   }
 }
