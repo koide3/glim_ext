@@ -37,15 +37,15 @@ private:
   void process_frame(const EstimationFrame::ConstPtr& new_frame);
   void process_submaps(const std::vector<SubMap::Ptr>& submaps);
 
-  void update_gridmap(const std::vector<Eigen::Vector4d>& points);
-
   std::vector<int> gridmap_data_;
-  int grid_width_;  // gridmapの幅。gridmapのセルがいくつ横にあるか
-  int grid_height_;  // gridmapの高さ。gridmapのセルがいくつ縦にあるか
+  std::vector<int> gridmap_realtime_data_;
+  std::vector<int> gridmap_submap_data_;
+  int grid_width_;          // gridmapの幅。gridmapのセルがいくつ横にあるか
+  int grid_height_;         // gridmapの高さ。gridmapのセルがいくつ縦にあるか
   float gridmap_origin_x_;  // gridmapの原点[m]。ワールド座標系に対応する。
   // 原点はGridmapの左下の点。それがワールド座標系のどこに位置するか。
   float gridmap_origin_y_;  // gridmapの原点[m]。ワールド座標系に対応する。
-  float resolution_;  // Gridmap 1セルの高さ(幅)。1セルは正方形。
+  float resolution_;        // Gridmap 1セルの高さ(幅)。1セルは正方形。
   float lower_bound_for_pt_z_;  // Gridmapに入れる点の高さ方向のフィルタリング。最低高さ。
   float upper_bound_for_pt_z_;  // 最高高さ。
   std::string gridmap_frame_id_;
@@ -62,7 +62,8 @@ private:
 
   std::deque<std::vector<Eigen::Vector4d>> SensorframeDataDeque_;
 
-  std::mutex gridmap_mutex_;
+  std::mutex realtime_data_mutex_;
+  std::mutex submap_data_mutex_;
 
   std::shared_ptr<spdlog::logger> logger_;
 };
@@ -72,15 +73,17 @@ GridmapExtensionModule::GridmapExtensionModule()
   logger_->info("Starting GridmapExtensionModule");
 
   gridmap_frame_id_ = "odom";
-  grid_width_ = 100;  // gridmapの幅。gridmapのセルがいくつ横にあるか
+  grid_width_ = 100;   // gridmapの幅。gridmapのセルがいくつ横にあるか
   grid_height_ = 100;  // gridmapの高さ。gridmapのセルがいくつ縦にあるか
   // 原点はGridmapの左下の点。それがワールド座標系のどこに位置するか。
   gridmap_origin_x_ = -25.0F;  // gridmapの原点[m]。ワールド座標系に対応する。
   gridmap_origin_y_ = -25.0F;  // gridmapの原点[m]。ワールド座標系に対応する。
-  resolution_ = 0.5F;  // Gridmap 1セルの高さ[m](幅)。1セルは正方形。
-  lower_bound_for_pt_z_ = 1;  // Gridmapに入れる点の高さ方向のフィルタリング。最低高さ。
-  upper_bound_for_pt_z_ = 2;  // 最高高さ。
+  resolution_ = 0.5F;          // Gridmap 1セルの高さ[m](幅)。1セルは正方形。
+  lower_bound_for_pt_z_ = 0.5;  // Gridmapに入れる点の高さ方向のフィルタリング。最低高さ。
+  upper_bound_for_pt_z_ = 1.5;  // 最高高さ。
   gridmap_data_ = std::vector<int>(grid_width_ * grid_height_, 0);
+  gridmap_realtime_data_ = std::vector<int>(grid_width_ * grid_height_, 0);
+  gridmap_submap_data_ = std::vector<int>(grid_width_ * grid_height_, 0);
 
   OdometryEstimationCallbacks::on_new_frame.add(
     [this](const EstimationFrame::ConstPtr& frame) { on_new_frame(frame); });
@@ -119,7 +122,8 @@ void GridmapExtensionModule::on_update_submaps(const std::vector<SubMap::Ptr>& s
 void GridmapExtensionModule::task() {
   while (running_) {
     // Sleep to prevent busy-waiting
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // 10Hz (100 milliseconds)
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // Process new frames
     auto frames = frame_queue_.get_all_and_clear();
@@ -158,13 +162,14 @@ void GridmapExtensionModule::publish_gridmap() {
       occupancy_grid.info.origin.orientation.w = 1.0;
 
       occupancy_grid.data.resize(grid_width_ * grid_height_);
-      {
-        std::lock_guard<std::mutex> lock(gridmap_mutex_);
-        for (int y = 0; y < grid_height_; ++y) {
-          for (int x = 0; x < grid_width_; ++x) {
-            int index = y * grid_width_ + x;
-            occupancy_grid.data[index] = gridmap_data_[index];
-          }
+      std::lock_guard<std::mutex> lock_realtime(realtime_data_mutex_);
+      std::lock_guard<std::mutex> lock_submap(submap_data_mutex_);
+
+      for (int y = 0; y < grid_height_; ++y) {
+        for (int x = 0; x < grid_width_; ++x) {
+          int index = y * grid_width_ + x;
+          occupancy_grid.data[index] =
+            std::max(gridmap_realtime_data_[index], gridmap_submap_data_[index]);
         }
       }
       gridmap_pub_->publish(occupancy_grid);
@@ -172,9 +177,8 @@ void GridmapExtensionModule::publish_gridmap() {
   }
 }
 
-// TODO(Izumita): ここを改善する。座標変換いちいち挟まない?
-// いやそれ無理じゃない。これは消すだけにして、Path_planner側でリアルタイム点群を受け取って移動に影響させるようにするか。
 void GridmapExtensionModule::process_frame(const EstimationFrame::ConstPtr& new_frame) {
+  std::lock_guard<std::mutex> lock(realtime_data_mutex_);
   std::vector<Eigen::Vector4d> transformed_points(new_frame->frame->size());
   for (size_t i = 0; i < new_frame->frame->size(); i++) {
     transformed_points[i] = new_frame->T_world_sensor() * new_frame->frame->points[i];
@@ -193,13 +197,19 @@ void GridmapExtensionModule::process_frame(const EstimationFrame::ConstPtr& new_
   for (const auto& frame_points : SensorframeDataDeque_) {
     sensor_points.insert(sensor_points.end(), frame_points.begin(), frame_points.end());
   }
-  {
-    std::lock_guard<std::mutex> lock(gridmap_mutex_);
-    update_gridmap(sensor_points);
+  std::fill(gridmap_realtime_data_.begin(), gridmap_realtime_data_.end(), 0);
+  for (const Eigen::Vector4d& pt : sensor_points) {
+    int x = static_cast<int>((pt.x() - gridmap_origin_x_) / resolution_);
+    int y = static_cast<int>((pt.y() - gridmap_origin_y_) / resolution_);
+    if (x >= 0 && x < grid_width_ && y >= 0 && y < grid_height_) {
+      int index = y * grid_width_ + x;
+      gridmap_realtime_data_[index] = 100;
+    }
   }
 }
 
 void GridmapExtensionModule::process_submaps(const std::vector<SubMap::Ptr>& submaps) {
+  std::lock_guard<std::mutex> lock(submap_data_mutex_);
   std::vector<Eigen::Vector4d> submap_points;
   for (const auto& submap : submaps) {
     if (!submap->frame) continue;
@@ -212,20 +222,13 @@ void GridmapExtensionModule::process_submaps(const std::vector<SubMap::Ptr>& sub
       }
     }
   }
-  {
-    std::lock_guard<std::mutex> lock(gridmap_mutex_);
-    std::fill(gridmap_data_.begin(), gridmap_data_.end(), 0);
-    update_gridmap(submap_points);
-  }
-}
-
-void GridmapExtensionModule::update_gridmap(const std::vector<Eigen::Vector4d>& points) {
-  for (const Eigen::Vector4d& pt : points) {
-    int x = static_cast<int>((pt.x() - gridmap_origin_x_ ) / resolution_);
-    int y = static_cast<int>((pt.y() - gridmap_origin_y_ ) / resolution_);
+  // std::fill(gridmap_submap_data_.begin(), gridmap_submap_data_.end(), 0);
+  for (const Eigen::Vector4d& pt : submap_points) {
+    int x = static_cast<int>((pt.x() - gridmap_origin_x_) / resolution_);
+    int y = static_cast<int>((pt.y() - gridmap_origin_y_) / resolution_);
     if (x >= 0 && x < grid_width_ && y >= 0 && y < grid_height_) {
       int index = y * grid_width_ + x;
-      gridmap_data_[index] = 100;
+      gridmap_submap_data_[index] = 100;
     }
   }
 }
