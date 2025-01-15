@@ -8,6 +8,7 @@
 #include <glim/util/extension_module.hpp>
 #include <glim/util/concurrent_vector.hpp>
 #include <glim/odometry/estimation_frame.hpp>
+#include <glim/mapping/sub_map.hpp>
 
 namespace gtsam_points {
 class IncrementalFixedLagSmootherExtWithFallback;
@@ -25,6 +26,7 @@ public:
 
 private:
   void task();
+  void on_insert_submap(const SubMap::ConstPtr& submap);
 
 private:
   std::atomic_bool kill_switch;
@@ -41,6 +43,11 @@ private:
   gtsam::Values new_values;
   gtsam::NonlinearFactorGraph new_factors;
   std::unique_ptr<gtsam_points::IncrementalFixedLagSmootherExtWithFallback> smoother;
+
+  std::atomic_bool global_mapping_enabled;
+  ConcurrentVector<EstimationFrame::ConstPtr> gvavity_aligned_frames_queue;
+  std::deque<EstimationFrame::ConstPtr> gravity_aligned_frames;
+  ConcurrentVector<gtsam::NonlinearFactor::shared_ptr> output_global_factors_queue;
 
   // vis
   std::unordered_map<std::string, std::vector<Eigen::Vector3d>> vis_data;

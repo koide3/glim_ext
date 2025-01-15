@@ -2,9 +2,7 @@
 
 #include <deque>
 #include <gtsam/inference/Symbol.h>
-#include <gtsam/slam/expressions.h>
 #include <gtsam/slam/BetweenFactor.h>
-#include <gtsam/nonlinear/ExpressionFactor.h>
 #include <gtsam_points/factors/linear_damping_factor.hpp>
 #include <gtsam_points/factors/reintegrated_imu_factor.hpp>
 #include <gtsam_points/optimizers/levenberg_marquardt_ext.hpp>
@@ -13,7 +11,10 @@
 #include <glim/util/logging.hpp>
 #include <glim/util/convert_to_string.hpp>
 #include <glim/odometry/callbacks.hpp>
+#include <glim/mapping/callbacks.hpp>
 #include <glim/common/imu_integration.hpp>
+
+#include <glim_ext/gravity_alignment_factor.hpp>
 
 #include <implot.h>
 #include <guik/viewer/light_viewer.hpp>
@@ -43,6 +44,7 @@ GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("
   smoother.reset(new gtsam_points::IncrementalFixedLagSmootherExtWithFallback(10.0, isam2_params));
 
   imu_integration.reset(new IMUIntegration());
+  global_mapping_enabled = false;
 
   glim::OdometryEstimationCallbacks::on_insert_imu.add([this](double stamp, const Eigen::Vector3d& a, const Eigen::Vector3d& w) {
     Eigen::Matrix<double, 7, 1> imu_data;
@@ -60,6 +62,16 @@ GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("
                                                               gtsam::Values& new_values,
                                                               std::map<std::uint64_t, double>& new_stamps) {  //
     new_factors.add(this->output_factors_queue.get_all_and_clear());
+  });
+
+  glim::GlobalMappingCallbacks::on_insert_submap.add([this](const auto& submap) { this->on_insert_submap(submap); });
+
+  glim::GlobalMappingCallbacks::on_smoother_update.add([this](gtsam_points::ISAM2Ext& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
+    const auto factors = this->output_global_factors_queue.get_all_and_clear();
+    if (factors.size()) {
+      logger->info("adding {} global factors", factors.size());
+      new_factors.add(factors);
+    }
   });
 
   kill_switch = false;
@@ -176,16 +188,13 @@ void GravityEstimatorModule::task() {
 
         output_factors_queue.push_back(bias_factor);
 
-        const Eigen::Vector3d upward = frame_->T_world_imu.linear().col(2).normalized();
-
-        const gtsam::Pose3_ T_world_imu_(X(frame->id));
-        const gtsam::Rot3_ R_world_imu_ = gtsam::rotation(T_world_imu_);
-        const gtsam::Unit3_ upward_est = gtsam::rotate(R_world_imu_, gtsam::Unit3_(gtsam::Unit3(0, 0, 1)));
-
         auto noise_model = gtsam::noiseModel::Isotropic::Sigma(2, 1e-3);
-        auto upward_factor = gtsam::make_shared<gtsam::ExpressionFactor<gtsam::Unit3>>(noise_model, gtsam::Unit3(upward), upward_est);
+        const Eigen::Vector3d upward = frame_->T_world_imu.linear().col(2).normalized();
+        auto upward_factor = create_gravity_alignment_factor(X(frame->id), upward, noise_model);
         output_factors_queue.push_back(upward_factor);
       }
+
+      gvavity_aligned_frames_queue.push_back(frame_);
 
       if (!guik::running()) {
         continue;
@@ -249,6 +258,39 @@ void GravityEstimatorModule::task() {
       });
     }
   }
+}
+
+void GravityEstimatorModule::on_insert_submap(const SubMap::ConstPtr& submap) {
+  global_mapping_enabled = true;
+
+  const auto frames = gvavity_aligned_frames_queue.get_all_and_clear();
+  gravity_aligned_frames.insert(gravity_aligned_frames.end(), frames.begin(), frames.end());
+
+  if (gravity_aligned_frames.empty()) {
+    return;
+  }
+
+  if (submap->origin_frame()->id < gravity_aligned_frames.front()->id) {
+    logger->debug("skip submap={} gravity_aligned_frames.size()={}", submap->id, gravity_aligned_frames.size());
+    return;
+  }
+
+  if (submap->origin_frame()->id > gravity_aligned_frames.back()->id) {
+    logger->debug("skip submap={} gravity_aligned_frames.size()={}", submap->id, gravity_aligned_frames.size());
+    return;
+  }
+
+  const auto found = std::find_if(gravity_aligned_frames.begin(), gravity_aligned_frames.end(), [&](const auto& frame) { return frame->id >= submap->origin_frame()->id; });
+  if (found == gravity_aligned_frames.end()) {
+    logger->warn("no gravity aligned frame found submap={} grav_frame[0]={} grav_frame[-1]={}", submap->id, gravity_aligned_frames.front()->id, gravity_aligned_frames.back()->id);
+    return;
+  }
+
+  logger->debug("submap={} frame={}", submap->id, (*found)->id);
+  const Eigen::Vector3d upward = (*found)->T_world_imu.linear().col(2).normalized();
+  const auto noise_model = gtsam::noiseModel::Isotropic::Sigma(2, 1e-3);
+  auto upward_factor = create_gravity_alignment_factor(X(submap->id), upward, noise_model);
+  output_global_factors_queue.push_back(upward_factor);
 }
 
 }  // namespace glim
