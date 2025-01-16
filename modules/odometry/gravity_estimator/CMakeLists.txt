@@ -9,6 +9,7 @@ find_package(Iridescence REQUIRED)
 add_library(gravity_estimator SHARED
   src/glim_ext/gravity_alignment_factor.cpp
   src/glim_ext/gravity_estimator.cpp
+  src/glim_ext/gravity_estimator_export.cpp
   src/glim_ext/gravity_estimator_create.cpp
 )
 target_include_directories(gravity_estimator PRIVATE

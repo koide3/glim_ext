@@ -26,14 +26,11 @@ using gtsam::symbol_shorthand::V;
 using gtsam::symbol_shorthand::X;
 
 struct GravEstimationFrame {
-  EstimationFrame::ConstPtr odom;
-  EstimationFrame::ConstPtr corrected;
+  EstimationFrame::ConstPtr odom;       // Original estimation frame
+  EstimationFrame::ConstPtr corrected;  // Gravity aligned estimation frame
 };
 
-struct GravityEstimationFrame {
-  EstimationFrame::ConstPtr frame;
-  boost::shared_ptr<gtsam_points::ReintegratedImuFactor> imu_factor;  // IMU factor between previous and current
-};
+struct VisualizationData {};
 
 GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("grav")) {
   logger->info("starting gravity estimator module");
@@ -44,6 +41,7 @@ GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("
   smoother.reset(new gtsam_points::IncrementalFixedLagSmootherExtWithFallback(10.0, isam2_params));
 
   imu_integration.reset(new IMUIntegration());
+  vis_data.reset(new VisualizationData());
   global_mapping_enabled = false;
 
   glim::OdometryEstimationCallbacks::on_insert_imu.add([this](double stamp, const Eigen::Vector3d& a, const Eigen::Vector3d& w) {
@@ -69,7 +67,7 @@ GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("
   glim::GlobalMappingCallbacks::on_smoother_update.add([this](gtsam_points::ISAM2Ext& isam2, gtsam::NonlinearFactorGraph& new_factors, gtsam::Values& new_values) {
     const auto factors = this->output_global_factors_queue.get_all_and_clear();
     if (factors.size()) {
-      logger->info("adding {} global factors", factors.size());
+      logger->debug("adding {} global factors", factors.size());
       new_factors.add(factors);
     }
   });
@@ -100,7 +98,7 @@ void GravityEstimatorModule::task() {
       imu_integration->insert_imu(imu[0], imu.block<3, 1>(1, 0), imu.block<3, 1>(4, 0));
     }
 
-    while (!waiting_frame_buffer.empty()) {
+    while (!waiting_frame_buffer.empty() && !imu_integration->imu_data_in_queue().empty()) {
       const double imu_last_time = imu_integration->imu_data_in_queue().back()[0];
       const auto frame = waiting_frame_buffer.front();
 
@@ -112,6 +110,8 @@ void GravityEstimatorModule::task() {
       const size_t current = frame->id;
 
       if (!last_frame) {
+        // Handling the very first frame
+
         new_values.insert(X(current), gtsam::Pose3(frame->T_world_imu.matrix()));
         new_values.insert(V(current), frame->v_world_imu);
         new_values.insert(B(current), gtsam::imuBias::ConstantBias(frame->imu_bias));
@@ -133,11 +133,13 @@ void GravityEstimatorModule::task() {
       const double curr_time = frame->stamp;
       const double last_time = last_frame->odom->stamp;
 
+      // Find IMU measurements in the time range
       std::vector<double> delta_times;
       std::vector<Eigen::Matrix<double, 7, 1>> integrated_imu_data;
       const int remove_loc = imu_integration->find_imu_data(last_time, curr_time, delta_times, integrated_imu_data);
       imu_integration->erase_imu_data(remove_loc);
 
+      // Create IMU factor
       gtsam_points::ReintegratedImuMeasurements rim(imu_integration->integrated_measurements().params());
       for (size_t i = 0; i < delta_times.size(); i++) {
         rim.integrateMeasurement(integrated_imu_data[i].block<3, 1>(1, 0), integrated_imu_data[i].block<3, 1>(4, 0), delta_times[i]);
@@ -168,9 +170,14 @@ void GravityEstimatorModule::task() {
       }
 
       smoother->update(new_factors, new_values, new_stamps);
+      if (smoother->fallbackHappened()) {
+        logger->warn("fallback happened");
+      }
+
       new_factors.resize(0);
       new_values.clear();
 
+      // Get the gravity aligned estimation result
       auto frame_ = frame->clone_wo_points();
       frame_->T_world_imu = Eigen::Isometry3d(smoother->calculateEstimate<gtsam::Pose3>(X(current)).matrix());
       frame_->v_world_imu = smoother->calculateEstimate<gtsam::Vector3>(V(current));
@@ -180,82 +187,29 @@ void GravityEstimatorModule::task() {
       last_frame->odom = frame;
       last_frame->corrected = frame_;
 
+      // Skip first frames until the estimation gets stabilized
       if (frame->id > 100) {
         auto bias_factor = gtsam::make_shared<gtsam::PriorFactor<gtsam::imuBias::ConstantBias>>(
           B(frame->id),
           gtsam::imuBias::ConstantBias(frame_->imu_bias),
           gtsam::noiseModel::Isotropic::Sigma(6, 1e-3));
-
         output_factors_queue.push_back(bias_factor);
 
-        auto noise_model = gtsam::noiseModel::Isotropic::Sigma(2, 1e-3);
+        auto noise_model = gtsam::noiseModel::Isotropic::Sigma(3, 1e-3);
         const Eigen::Vector3d upward = frame_->T_world_imu.linear().col(2).normalized();
-        auto upward_factor = create_gravity_alignment_factor(X(frame->id), upward, noise_model);
+
+        // auto upward_factor = create_gravity_alignment_factor(X(frame->id), upward, noise_model);
+        auto upward_factor = gtsam::make_shared<GravityAlignmentFactor>(X(frame->id), upward, noise_model);
         output_factors_queue.push_back(upward_factor);
       }
 
-      gvavity_aligned_frames_queue.push_back(frame_);
+      if (global_mapping_enabled) {
+        gvavity_aligned_frames_queue.push_back(frame_);
+      }
 
       if (!guik::running()) {
         continue;
       }
-
-      const Eigen::Vector3d mean_acc = imu_factor->measurements().mean_acc();
-      const Eigen::Vector3d upward_before = frame->T_world_imu.linear() * mean_acc;
-      const Eigen::Vector3d upward_after = frame_->T_world_imu.linear() * mean_acc;
-
-      vis_data["upward_before"].emplace_back(upward_before);
-      vis_data["upward_after"].emplace_back(upward_after);
-      vis_data["biasv_before"].emplace_back(frame->imu_bias.block<3, 1>(0, 0));
-      vis_data["biasv_after"].emplace_back(frame_->imu_bias.block<3, 1>(0, 0));
-      vis_data["biasw_before"].emplace_back(frame->imu_bias.block<3, 1>(3, 0));
-      vis_data["biasw_after"].emplace_back(frame_->imu_bias.block<3, 1>(3, 0));
-
-      auto viewer = guik::viewer();
-      viewer->invoke_once("setup_plots", [=] {
-        viewer->setup_plot("upward_before", 800, 150, 0, 0, 0, 1);
-        viewer->setup_plot("upward_after", 800, 150, 0, 0, 0, 2);
-        viewer->setup_plot("biasv_before", 800, 150, 0, 0, 0, 3);
-        viewer->setup_plot("biasv_after", 800, 150, 0, 0, 0, 4);
-        viewer->setup_plot("biasw_before", 800, 150, 0, 0, 0, 5);
-        viewer->setup_plot("biasw_after", 800, 150, 0, 0, 0, 6);
-
-        viewer->link_plot_axes("upward_before", 1);
-        viewer->link_plot_axes("upward_after", 1);
-
-        viewer->link_plot_axes("biasv_before", 2);
-        viewer->link_plot_axes("biasv_after", 2);
-
-        viewer->link_plot_axes("biasw_before", 3);
-        viewer->link_plot_axes("biasw_after", 3);
-      });
-
-      viewer->invoke([=] {
-        auto viewer = guik::viewer();
-        viewer->update_plot_line("upward_before", "x", vis_data["upward_before"], [](const Eigen::Vector3d& acc) { return acc.x(); });
-        viewer->update_plot_line("upward_before", "y", vis_data["upward_before"], [](const Eigen::Vector3d& acc) { return acc.y(); });
-        viewer->update_plot_line("upward_before", "z", vis_data["upward_before"], [](const Eigen::Vector3d& acc) { return acc.z(); });
-
-        viewer->update_plot_line("upward_after", "x", vis_data["upward_after"], [](const Eigen::Vector3d& acc) { return acc.x(); });
-        viewer->update_plot_line("upward_after", "y", vis_data["upward_after"], [](const Eigen::Vector3d& acc) { return acc.y(); });
-        viewer->update_plot_line("upward_after", "z", vis_data["upward_after"], [](const Eigen::Vector3d& acc) { return acc.z(); });
-
-        viewer->update_plot_line("biasv_before", "x", vis_data["biasv_before"], [](const Eigen::Vector3d& bias) { return bias.x(); });
-        viewer->update_plot_line("biasv_before", "y", vis_data["biasv_before"], [](const Eigen::Vector3d& bias) { return bias.y(); });
-        viewer->update_plot_line("biasv_before", "z", vis_data["biasv_before"], [](const Eigen::Vector3d& bias) { return bias.z(); });
-
-        viewer->update_plot_line("biasv_after", "x", vis_data["biasv_after"], [](const Eigen::Vector3d& bias) { return bias.x(); });
-        viewer->update_plot_line("biasv_after", "y", vis_data["biasv_after"], [](const Eigen::Vector3d& bias) { return bias.y(); });
-        viewer->update_plot_line("biasv_after", "z", vis_data["biasv_after"], [](const Eigen::Vector3d& bias) { return bias.z(); });
-
-        viewer->update_plot_line("biasw_before", "x", vis_data["biasw_before"], [](const Eigen::Vector3d& bias) { return bias.x(); });
-        viewer->update_plot_line("biasw_before", "y", vis_data["biasw_before"], [](const Eigen::Vector3d& bias) { return bias.y(); });
-        viewer->update_plot_line("biasw_before", "z", vis_data["biasw_before"], [](const Eigen::Vector3d& bias) { return bias.z(); });
-
-        viewer->update_plot_line("biasw_after", "x", vis_data["biasw_after"], [](const Eigen::Vector3d& bias) { return bias.x(); });
-        viewer->update_plot_line("biasw_after", "y", vis_data["biasw_after"], [](const Eigen::Vector3d& bias) { return bias.y(); });
-        viewer->update_plot_line("biasw_after", "z", vis_data["biasw_after"], [](const Eigen::Vector3d& bias) { return bias.z(); });
-      });
     }
   }
 }
@@ -288,8 +242,9 @@ void GravityEstimatorModule::on_insert_submap(const SubMap::ConstPtr& submap) {
 
   logger->debug("submap={} frame={}", submap->id, (*found)->id);
   const Eigen::Vector3d upward = (*found)->T_world_imu.linear().col(2).normalized();
-  const auto noise_model = gtsam::noiseModel::Isotropic::Sigma(2, 1e-3);
-  auto upward_factor = create_gravity_alignment_factor(X(submap->id), upward, noise_model);
+  const auto noise_model = gtsam::noiseModel::Isotropic::Sigma(3, 1e-3);
+  // auto upward_factor = create_gravity_alignment_factor(X(submap->id), upward, noise_model);
+  auto upward_factor = gtsam::make_shared<GravityAlignmentFactor>(X(submap->id), upward, noise_model);
   output_global_factors_queue.push_back(upward_factor);
 }
 
