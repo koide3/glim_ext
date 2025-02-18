@@ -7,10 +7,12 @@ namespace glim {
 
 class LevelFactor : public gtsam::NoiseModelFactorN<gtsam::Pose3, gtsam::Pose3> {
 public:
+  LevelFactor() {}
   explicit LevelFactor(gtsam::Key pose_i_key, gtsam::Key pose_j_key, gtsam::SharedNoiseModel noise_model)
   : gtsam::NoiseModelFactorN<gtsam::Pose3, gtsam::Pose3>(noise_model, {pose_i_key, pose_j_key}) {}
+  ~LevelFactor() override {}
 
-  gtsam::Vector evaluateError(const gtsam::Pose3& pose_i, const gtsam::Pose3& pose_j, boost::optional<gtsam::Matrix&> H1, boost::optional<gtsam::Matrix&> H2) const {
+  gtsam::Vector evaluateError(const gtsam::Pose3& pose_i, const gtsam::Pose3& pose_j, boost::optional<gtsam::Matrix&> H1, boost::optional<gtsam::Matrix&> H2) const override {
     const double residual = (pose_i.translation().z() - pose_j.translation().z());
 
     if (H1) {
@@ -24,6 +26,16 @@ public:
     }
 
     return (gtsam::Vector(1) << residual).finished();
+  }
+
+  gtsam::NonlinearFactor::shared_ptr clone() const override { return gtsam::make_shared<LevelFactor>(*this); }
+
+private:
+  /** Serialization function */
+  friend class boost::serialization::access;
+  template <class ARCHIVE>
+  void serialize(ARCHIVE& ar, const unsigned int /*version*/) {
+    ar& boost::serialization::make_nvp("NoiseModelFactor2", boost::serialization::base_object<Base>(*this));
   }
 };
 
