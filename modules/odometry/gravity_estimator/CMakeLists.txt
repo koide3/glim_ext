@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.16)
 project(gravity_estimator)
 
 find_package(glim REQUIRED)
-find_package(GTSAM REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Iridescence REQUIRED)
 
@@ -17,7 +16,6 @@ target_include_directories(gravity_estimator PRIVATE
 )
 target_link_libraries(gravity_estimator
   glim::glim
-  GTSAM::GTSAM
   Iridescence::Iridescence
 )
 target_compile_options(gravity_estimator PRIVATE
