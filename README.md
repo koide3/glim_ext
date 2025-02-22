@@ -11,6 +11,19 @@ glim_ext is a set of extension modules for [GLIM](https://github.com/koide3/glim
 
 Each module in glim_ext uses several external libraries that employ different licensing conditions. You must carefully check and follow their licenses.
 
+## Usage
+
+To enable an extension module, add the so filename to `extension_modules` in `glim/config/config_ros.json`. E.g., 
+
+```
+"extension_modules": [
+    "libmemory_monitor.so",
+    "libstandard_viewer.so",
+    "librviz_viewer.so",
+    "libimu_validator.so"   // Added
+  ],
+```
+
 
 ## Config path addressing
 

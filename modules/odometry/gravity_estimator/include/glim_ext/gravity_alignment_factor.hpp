@@ -22,9 +22,7 @@ public:
   GravityAlignmentFactor(gtsam::Key key, const Eigen::Vector3d& upward, const gtsam::SharedNoiseModel& noise_model);
   ~GravityAlignmentFactor() override;
 
-  gtsam::NonlinearFactor::shared_ptr clone() const override {
-    return gtsam::make_shared<GravityAlignmentFactor>(*this);
-  }
+  gtsam::NonlinearFactor::shared_ptr clone() const override;
 
   gtsam::Vector evaluateError(const gtsam::Pose3& pose, boost::optional<gtsam::Matrix&> H = boost::none) const override;
 
