@@ -1,5 +1,6 @@
 #include <glim_ext/gravity_alignment_factor.hpp>
 
+#include <gtsam/base/make_shared.h>
 #include <gtsam/slam/expressions.h>
 #include <gtsam/nonlinear/ExpressionFactor.h>
 
@@ -17,6 +18,10 @@ GravityAlignmentFactor::GravityAlignmentFactor(gtsam::Key key, const Eigen::Vect
   upward(upward) {}
 
 GravityAlignmentFactor::~GravityAlignmentFactor() {}
+
+gtsam::NonlinearFactor::shared_ptr GravityAlignmentFactor::clone() const {
+  return gtsam::make_shared<GravityAlignmentFactor>(*this);
+}
 
 gtsam::Vector GravityAlignmentFactor::evaluateError(const gtsam::Pose3& pose, boost::optional<gtsam::Matrix&> H) const {
   gtsam::Matrix36 H_R_pose;
