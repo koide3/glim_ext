@@ -8,8 +8,6 @@
 #include <gtsam_points/optimizers/levenberg_marquardt_ext.hpp>
 #include <gtsam_points/optimizers/incremental_fixed_lag_smoother_with_fallback.hpp>
 
-#include <gtsam_points/util/easy_profiler.hpp>
-
 #include <glim/util/logging.hpp>
 #include <glim/util/convert_to_string.hpp>
 #include <glim/odometry/callbacks.hpp>
@@ -92,8 +90,6 @@ bool GravityEstimatorModule::needs_wait() const {
   return latest_input_frame_id - latest_processed_frame_id > 25;
 }
 
-std::ofstream grav_ofs("/tmp/prof_grav.txt");
-
 void GravityEstimatorModule::task() {
   std::deque<EstimationFrame::ConstPtr> waiting_frame_buffer;
 
@@ -118,8 +114,6 @@ void GravityEstimatorModule::task() {
         break;
       }
       waiting_frame_buffer.pop_front();
-
-      gtsam_points::EasyProfiler prof("grav", grav_ofs);
 
       const size_t current = frame->id;
 
@@ -147,21 +141,18 @@ void GravityEstimatorModule::task() {
       const double curr_time = frame->stamp;
       const double last_time = last_frame->odom->stamp;
 
-      prof.push("integrate");
       // Find IMU measurements in the time range
       std::vector<double> delta_times;
       std::vector<Eigen::Matrix<double, 7, 1>> integrated_imu_data;
       const int remove_loc = imu_integration->find_imu_data(last_time, curr_time, delta_times, integrated_imu_data);
       imu_integration->erase_imu_data(remove_loc);
 
-      prof.push("create factor");
       // Create IMU factor
       gtsam_points::ReintegratedImuMeasurements rim(imu_integration->integrated_measurements().params());
       for (size_t i = 0; i < delta_times.size(); i++) {
         rim.integrateMeasurement(integrated_imu_data[i].block<3, 1>(1, 0), integrated_imu_data[i].block<3, 1>(4, 0), delta_times[i]);
       }
 
-      prof.push("create graph");
       auto imu_factor = gtsam::make_shared<gtsam_points::ReintegratedImuFactor>(X(current - 1), V(current - 1), X(current), V(current), B(current - 1), rim);
       new_factors.add(imu_factor);
 
@@ -186,12 +177,10 @@ void GravityEstimatorModule::task() {
         new_stamps[value.key] = frame->stamp;
       }
 
-      prof.push("update");
       smoother->update(new_factors, new_values, new_stamps);
       if (smoother->fallbackHappened()) {
         logger->warn("fallback happened");
       }
-      prof.push("updated");
 
       new_factors.resize(0);
       new_values.clear();
@@ -208,8 +197,6 @@ void GravityEstimatorModule::task() {
 
       // Skip first frames until the estimation gets stabilized
       if (frame->id > 100) {
-        prof.push("new factors");
-
         auto bias_factor = gtsam::make_shared<gtsam::PriorFactor<gtsam::imuBias::ConstantBias>>(
           B(frame->id),
           gtsam::imuBias::ConstantBias(frame_->imu_bias),
@@ -224,7 +211,6 @@ void GravityEstimatorModule::task() {
         output_factors_queue.push_back(upward_factor);
       }
 
-      prof.push("done");
       if (global_mapping_enabled) {
         gvavity_aligned_frames_queue.push_back(frame_);
       }
