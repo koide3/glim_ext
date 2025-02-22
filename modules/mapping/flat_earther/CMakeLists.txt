@@ -7,6 +7,7 @@ find_package(glim REQUIRED)
 
 add_library(flat_earther SHARED
   src/glim_ext/flat_earther.cpp
+  src/glim_ext/flat_earther_export.cpp
 )
 target_include_directories(flat_earther PRIVATE
   include

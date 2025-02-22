@@ -30,6 +30,7 @@ public:
   ~GravityEstimatorModule();
 
 private:
+  bool needs_wait() const override;
   void task();
   void on_insert_submap(const SubMap::ConstPtr& submap);
 
@@ -38,6 +39,10 @@ private:
   std::thread thread;
 
   std::unique_ptr<IMUIntegration> imu_integration;
+
+  // Load control
+  std::atomic_int64_t latest_input_frame_id;
+  std::atomic_int64_t latest_processed_frame_id;
 
   // Input and output queues
   ConcurrentVector<Eigen::Matrix<double, 7, 1>> input_imu_queue;

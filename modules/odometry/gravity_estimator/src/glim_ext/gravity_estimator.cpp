@@ -37,12 +37,15 @@ GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("
 
   gtsam::ISAM2Params isam2_params;
   isam2_params.relinearizeSkip = 1;
-  isam2_params.setRelinearizeThreshold(1e-3);
-  smoother.reset(new gtsam_points::IncrementalFixedLagSmootherExtWithFallback(10.0, isam2_params));
+  isam2_params.setRelinearizeThreshold(1e-2);
+  smoother.reset(new gtsam_points::IncrementalFixedLagSmootherExtWithFallback(1.5, isam2_params));
 
   imu_integration.reset(new IMUIntegration());
   vis_data.reset(new VisualizationData());
   global_mapping_enabled = false;
+
+  latest_input_frame_id = 0;
+  latest_processed_frame_id = 0;
 
   glim::OdometryEstimationCallbacks::on_insert_imu.add([this](double stamp, const Eigen::Vector3d& a, const Eigen::Vector3d& w) {
     Eigen::Matrix<double, 7, 1> imu_data;
@@ -51,6 +54,7 @@ GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("
   });
 
   glim::OdometryEstimationCallbacks::on_update_frames.add([this](const std::vector<EstimationFrame::ConstPtr>& frames) {  //
+    latest_input_frame_id = frames.back()->id;
     input_frame_queue.push_back(frames.back()->clone());
   });
 
@@ -80,6 +84,10 @@ GravityEstimatorModule::GravityEstimatorModule() : logger(create_module_logger("
 GravityEstimatorModule::~GravityEstimatorModule() {
   kill_switch = true;
   thread.join();
+}
+
+bool GravityEstimatorModule::needs_wait() const {
+  return latest_input_frame_id - latest_processed_frame_id > 25;
 }
 
 void GravityEstimatorModule::task() {
@@ -207,6 +215,8 @@ void GravityEstimatorModule::task() {
         gvavity_aligned_frames_queue.push_back(frame_);
       }
 
+      latest_processed_frame_id = frame->id;
+
       if (!guik::running()) {
         continue;
       }
@@ -246,6 +256,8 @@ void GravityEstimatorModule::on_insert_submap(const SubMap::ConstPtr& submap) {
   // auto upward_factor = create_gravity_alignment_factor(X(submap->id), upward, noise_model);
   auto upward_factor = gtsam::make_shared<GravityAlignmentFactor>(X(submap->id), upward, noise_model);
   output_global_factors_queue.push_back(upward_factor);
+
+  gravity_aligned_frames.erase(gravity_aligned_frames.begin(), found);
 }
 
 }  // namespace glim
