@@ -7,6 +7,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 option(ENABLE_ORBSLAM "Enable ORB-SLAM odometry" OFF)
 option(ENABLE_VELSUPP "Enable Velocity suppressor" ON)
 option(ENABLE_IMUVAL "Enable IMU calibration validator" ON)
+option(ENABLE_GRAVITY "Enable Gravity estimation and correction module" ON)
 
 # Local and global mapping modules
 option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
@@ -60,6 +61,11 @@ endif()
 if(ENABLE_IMUVAL)
   add_subdirectory(modules/odometry/imu_validator)
   list(APPEND glim_ext_LIBRARIES imu_validator)
+endif()
+
+if(ENABLE_GRAVITY)
+  add_subdirectory(modules/odometry/gravity_estimator)
+  list(APPEND glim_ext_LIBRARIES gravity_estimator)
 endif()
 
 # Local and global mapping modules
