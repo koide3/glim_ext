@@ -24,7 +24,7 @@ public:
 
   gtsam::NonlinearFactor::shared_ptr clone() const override;
 
-  gtsam::Vector evaluateError(const gtsam::Pose3& pose, boost::optional<gtsam::Matrix&> H = boost::none) const override;
+  gtsam::Vector evaluateError(const gtsam::Pose3& pose, gtsam::OptionalMatrixType H = nullptr) const override;
 
 private:
   /** Serialization function */
