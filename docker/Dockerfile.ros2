@@ -1,4 +1,4 @@
-FROM koide3/glim_ros2:humble
+FROM koide3/glim_ros2:humble_gtsam4.3a0
 
 COPY . /root/ros2_ws/src/glim_ext
 
