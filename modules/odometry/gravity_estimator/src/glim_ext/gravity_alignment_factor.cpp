@@ -23,7 +23,7 @@ gtsam::NonlinearFactor::shared_ptr GravityAlignmentFactor::clone() const {
   return gtsam::make_shared<GravityAlignmentFactor>(*this);
 }
 
-gtsam::Vector GravityAlignmentFactor::evaluateError(const gtsam::Pose3& pose, boost::optional<gtsam::Matrix&> H) const {
+gtsam::Vector GravityAlignmentFactor::evaluateError(const gtsam::Pose3& pose, gtsam::OptionalMatrixType H) const {
   gtsam::Matrix36 H_R_pose;
   const gtsam::Rot3 R = pose.rotation(H_R_pose);
 
