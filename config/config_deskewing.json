@@ -1,0 +1,8 @@
+{
+  "deskewing": {
+    "save_ply": true,
+    "save_points_lidar": false,
+    "save_points_imu": true,
+    "ply_path": "/tmp/dump/deskewed_points"
+  }
+}

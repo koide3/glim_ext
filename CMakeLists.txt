@@ -8,6 +8,7 @@ option(ENABLE_ORBSLAM "Enable ORB-SLAM odometry" OFF)
 option(ENABLE_VELSUPP "Enable Velocity suppressor" ON)
 option(ENABLE_IMUVAL "Enable IMU calibration validator" ON)
 option(ENABLE_GRAVITY "Enable Gravity estimation and correction module" ON)
+option(ENABLE_DESKEWING "Enable Point Cloud Deskewing module" ON)
 
 # Local and global mapping modules
 option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
@@ -66,6 +67,11 @@ endif()
 if(ENABLE_GRAVITY)
   add_subdirectory(modules/odometry/gravity_estimator)
   list(APPEND glim_ext_LIBRARIES gravity_estimator)
+endif()
+
+if(ENABLE_DESKEWING)
+  add_subdirectory(modules/odometry/deskewing)
+  list(APPEND glim_ext_LIBRARIES deskewing)
 endif()
 
 # Local and global mapping modules

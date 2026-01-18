@@ -8,6 +8,7 @@
     // odometry
     "config_velocity_suppressor": "config_velocity_suppressor.json",
     "config_orb_slam": "config_orb_slam.json",
+    "config_deskewing": "config_deskewing.json",
     // mapping
     "config_flat_earther": "config_flat_earther.json",
     "config_gnss_global": "config_gnss_global.json",

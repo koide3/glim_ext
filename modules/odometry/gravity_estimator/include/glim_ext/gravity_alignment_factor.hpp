@@ -2,6 +2,7 @@
 
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
+#include <gtsam_points/util/gtsam_migration.hpp>
 
 namespace glim {
 
@@ -24,7 +25,7 @@ public:
 
   gtsam::NonlinearFactor::shared_ptr clone() const override;
 
-  gtsam::Vector evaluateError(const gtsam::Pose3& pose, gtsam::OptionalMatrixType H = nullptr) const override;
+  gtsam::Vector evaluateError(const gtsam::Pose3& pose, gtsam_points::OptionalMatrixType H = gtsam_points::NoneValue) const override;
 
 private:
   /** Serialization function */
