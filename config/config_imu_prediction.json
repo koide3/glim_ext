@@ -1,0 +1,5 @@
+{
+  "imu_prediction": {
+    "max_publish_rate": 25.0
+  }
+}
