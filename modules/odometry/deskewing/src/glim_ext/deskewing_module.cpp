@@ -80,7 +80,7 @@ void DeskewingModule::task() {
       continue;
     }
 
-    logger->info("deskewing frame at time {}", frame->stamp);
+    logger->debug("deskewing frame at time {}", frame->stamp);
     auto result = deskew_frame(frame);
 
     save_deskewed_frame(result);
