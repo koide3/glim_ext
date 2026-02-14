@@ -60,6 +60,10 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_points_lidar_pub;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_points_aligned_pub;
 
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_points_scanend_imu_pub;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_points_scanend_lidar_pub;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_points_scanend_aligned_pub;
+
   //
   Eigen::Isometry3d T_lidar_imu;
   std::unique_ptr<CloudDeskewing> deskewing;
