@@ -1,9 +1,9 @@
-**!!! This repository constains half-baked code that may not be well-maintained and not suitable for practical purposes. !!!**  
+**!!! This repository constains half-baked code that may not be well-maintained and not suitable for practical purposes. !!!**
 **!!! We don't have resource to maintain this extension library. If you find an issue, please fix it by yourself and open a PR to share the solution. !!!**
 
 # glim_ext
 
-glim_ext is a set of extension modules for [GLIM](https://github.com/koide3/glim), 3D LiDAR mapping framework. With this package, we aim to provide reference implementations that demonstrate how GLIM can be extended through the global callback slot mechanism. 
+glim_ext is a set of extension modules for [GLIM](https://github.com/koide3/glim), 3D LiDAR mapping framework. With this package, we aim to provide reference implementations that demonstrate how GLIM can be extended through the global callback slot mechanism.
 
 [![EXT](https://github.com/koide3/glim_ext/actions/workflows/build.yml/badge.svg)](https://github.com/koide3/glim_ext/actions/workflows/build.yml)
 
@@ -13,7 +13,7 @@ Each module in glim_ext uses several external libraries that employ different li
 
 ## Usage
 
-To enable an extension module, add the so filename to `extension_modules` in `glim/config/config_ros.json`. E.g., 
+To enable an extension module, add the so filename to `extension_modules` in `glim/config/config_ros.json`. E.g.,
 
 ```
 "extension_modules": [
@@ -37,15 +37,24 @@ Example (`libflat_earther.so`):
 
 ## Example Modules
 
-### Callback demo
+### Callback demo (libglim_callback_demo.so)
 - This modules subscribes to all available callbacks to demonstrate how mapping states can be retrieved
 
 ## Odometry estimation Modules
 
-### IMU validator
+### Point cloud deskewing (libdeskewer.so)
+- Publishing and saving deskewed point clouds (without downsampling).
+
+### IMU validator (libimu_validator.so)
 - Validator for LiDAR-IMU transformation configurations.
 
-### Velocity supressor
+### IMU prediction (libimu_prediction.so)
+- Publishing IMU-based state estimation at a high frequency for low-latency applications.
+
+### Gravity estimation (libgravity_estimator.so)
+- Estimating the gravity vector in the sensor frame, and forcing the upward direction of the state estimation to be aligned with the gravity direction.
+
+### Velocity supressor (libvelocity_supressor.so)
 - Regulating the velocity range.
 
 ### ORB_SLAM odometry (Not Maintained)
@@ -54,14 +63,14 @@ Example (`libflat_earther.so`):
 
 ## Global Optimization Modules
 
-### Flat earther
+### Flat earther (libflat_earther.so)
 - Forcing the height of proximiate submaps be the same.
 - This is useful in situations only a single floor exists and the height of the sensor from the floor is mostly unchanged.
 
-### GNSS constraints (ROS2 only)
+### GNSS constraints (libgnss_global.so, ROS2 only)
 - GNSS-based constraints for global optimization
 
-### ScanContext Loop Detector
+### ScanContext Loop Detector (libscancontext_loop_detector.so)
 - Explicit loop detection based on ScanContext
 - Dependency: [ScanContext](https://github.com/irapkaist/scancontext) (CC BY-NC-SA 4.0)
 

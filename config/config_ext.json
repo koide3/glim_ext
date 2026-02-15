@@ -6,6 +6,7 @@
     // common
     "config_sensors_ext": "config_sensors_ext.json",
     // odometry
+    "config_imu_prediction": "config_imu_prediction.json",
     "config_velocity_suppressor": "config_velocity_suppressor.json",
     "config_orb_slam": "config_orb_slam.json",
     "config_deskewing": "config_deskewing.json",
