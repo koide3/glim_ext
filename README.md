@@ -42,6 +42,9 @@ Example (`libflat_earther.so`):
 
 ## Odometry estimation Modules
 
+### FAST-LIO2 (libodometry_estimation_fastlio.so)
+- Odometry estimation module that wraps for FAST-LIO2. It can be used as an in-place replacement for the default `odometry_estimation_gpu` or `cpu`.
+
 ### Point cloud deskewing (libdeskewer.so)
 - Publishing and saving deskewed point clouds (without downsampling).
 

@@ -10,3 +10,6 @@
 [submodule "orb_slam_frontend/thirdparty/ORB_SLAM3"]
 	path = modules/odometry/orb_slam_frontend/thirdparty/ORB_SLAM3
 	url = https://github.com/koide3/ORB_SLAM3.git
+[submodule "modules/odometry/fastlio2/thirdparty/FAST_LIO"]
+	path = modules/odometry/fastlio2/thirdparty/FAST_LIO
+	url = git@github.com:koide3/FAST_LIO
