@@ -10,6 +10,7 @@ option(ENABLE_IMUVAL "Enable IMU calibration validator" ON)
 option(ENABLE_IMUPRED "Enable IMU prediction module" ON)
 option(ENABLE_GRAVITY "Enable Gravity estimation and correction module" ON)
 option(ENABLE_DESKEWING "Enable Point Cloud Deskewing module" ON)
+option(ENABLE_FASTLIO2 "Enable FAST-LIO2 odometry" OFF)
 
 # Local and global mapping modules
 option(ENABLE_SCAN_CONTEXT "Enable ScanContext Loop Detector" OFF)
@@ -78,6 +79,12 @@ endif()
 if(ENABLE_DESKEWING)
   add_subdirectory(modules/odometry/deskewing)
   list(APPEND glim_ext_LIBRARIES deskewing)
+endif()
+
+if(ENABLE_FASTLIO2)
+  message(WARNING "Enabling FAST-LIO2 odometry. This module is GPL-licensed.")
+  add_subdirectory(modules/odometry/fastlio2)
+  list(APPEND glim_ext_LIBRARIES odometry_estimation_fastlio2)
 endif()
 
 # Local and global mapping modules
