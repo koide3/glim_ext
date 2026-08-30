@@ -5,16 +5,16 @@
     "num_threads": 4,
     "max_iterations": 4,
     // Downsampling
-    "filter_size_surf": 0.5,
-    "filter_size_map": 0.5,
+    "filter_size_surf": 0.25,
+    "filter_size_map": 0.25,
     // Local map management
     "cube_side_length": 1000.0,
     "det_range": 300.0,
-    // IMU noise params
-    "gyr_cov": 0.1,
-    "acc_cov": 0.1,
-    "b_gyr_cov": 0.0001,
-    "b_acc_cov": 0.0001,
+    // IMU noise params (noise settings in config_sensors.json are used)
+    // "gyr_cov": 0.1,
+    // "acc_cov": 0.1,
+    // "b_gyr_cov": 0.0001,
+    // "b_acc_cov": 0.0001,
     // Online LiDAR-IMU extrinsic estimation
     "extrinsic_est_en": false
   }
