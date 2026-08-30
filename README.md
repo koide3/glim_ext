@@ -40,6 +40,9 @@ Example (`libflat_earther.so`):
 ### Callback demo (libglim_callback_demo.so)
 - This modules subscribes to all available callbacks to demonstrate how mapping states can be retrieved
 
+### Logger hook demo (liblogger_hook_demo.so)
+- This module hooks into all loggers and prints log messages to the console. It is assumed to be loaded after all other modules, so that it can hook into all loggers.
+
 ## Odometry estimation Modules
 
 ### FAST-LIO2 (libodometry_estimation_fastlio.so)
