@@ -18,9 +18,11 @@ DeskewingParams::DeskewingParams() {
   Config config(GlobalConfigExt::get_config_path("config_deskewing"));
   use_thread = config.param<bool>("deskewing", "use_thread", true);
   save_ply = config.param<bool>("deskewing", "save_ply", false);
+  save_raw_points = config.param<bool>("deskewing", "save_raw_points", false);
   save_points_lidar = config.param<bool>("deskewing", "save_points_lidar", false);
   save_points_imu = config.param<bool>("deskewing", "save_points_imu", false);
   ply_path = config.param<std::string>("deskewing", "ply_path", "/tmp/dump/deskewed_points");
+  raw_ply_path = config.param<std::string>("deskewing", "raw_ply_path", "/tmp/dump/raw_points");
 }
 
 DeskewingParams::~DeskewingParams() {}
@@ -31,6 +33,10 @@ DeskewingModule::DeskewingModule(const DeskewingParams& params, const std::strin
   if (params.save_ply) {
     logger->info("creating dst directory: {}", params.ply_path);
     std::filesystem::create_directories(params.ply_path);
+  }
+  if (params.save_raw_points) {
+    logger->info("creating dst directory: {}", params.raw_ply_path);
+    std::filesystem::create_directories(params.raw_ply_path);
   }
 
   deskewing.reset(new CloudDeskewing());
@@ -65,6 +71,7 @@ bool DeskewingModule::needs_wait() const {
 }
 
 void DeskewingModule::on_new_frame(const EstimationFrame::ConstPtr& frame) {
+  logger->debug("received new frame {} at time {}", frame->id, frame->stamp);
   if (!params.use_thread) {
     process_frame(frame);
     return;
@@ -87,7 +94,6 @@ void DeskewingModule::task() {
 void DeskewingModule::process_frame(const EstimationFrame::ConstPtr& frame) {
   if (frame->imu_rate_trajectory.size() == 0) {
     logger->warn("IMU rate trajectory is empty. Set save_imu_rate_trajectory=true in config_odometry_*.json");
-    return;
   }
 
   if (frame->raw_frame == nullptr) {
@@ -100,7 +106,7 @@ void DeskewingModule::process_frame(const EstimationFrame::ConstPtr& frame) {
     return;
   }
 
-  logger->debug("deskewing frame at time {}", frame->stamp);
+  logger->debug("deskewing frame {} at time {}", frame->id, frame->stamp);
   auto result = deskew_frame(frame);
   on_deskeweing_result(result);
 
@@ -113,8 +119,8 @@ DeskewingResult::Ptr DeskewingModule::deskew_frame(const EstimationFrame::ConstP
   const Eigen::Isometry3d T_lidar_imu = frame->T_lidar_imu;
 
   auto points = std::make_shared<gtsam_points::PointCloudCPU>();
-  points->add_times(raw_points->times);
   points->add_points(raw_points->points);
+  points->add_times(raw_points->times);
   if (!raw_points->intensities.empty()) {
     points->add_intensities(raw_points->intensities);
   }
@@ -137,22 +143,27 @@ DeskewingResult::Ptr DeskewingModule::deskew_frame(const EstimationFrame::ConstP
     time_indices[i] = static_cast<int>(time_table.size()) - 1;
   }
 
-  // Integrate IMU trajectory (t, x, y, z, qx, qy, qz, qw) x N
-  const Eigen::Matrix<double, 8, -1>& imu_traj = frame->imu_rate_trajectory;
-
-  std::vector<double> imu_times(imu_traj.cols());
-  std::vector<Eigen::Isometry3d> imu_poses(imu_traj.cols());
-  for (int i = 0; i < imu_traj.cols(); i++) {
-    imu_times[i] = imu_traj(0, i);
-    imu_poses[i] = Eigen::Isometry3d::Identity();
-    imu_poses[i].translation() = imu_traj.block<3, 1>(1, i);
-    imu_poses[i].linear() = Eigen::Quaterniond(imu_traj(7, i), imu_traj(4, i), imu_traj(5, i), imu_traj(6, i)).toRotationMatrix();
-  }
-
   auto result = std::make_shared<DeskewingResult>();
   result->frame = frame;
   result->raw_points = points;
-  result->deskewed_points_lidar = deskewing->deskew(T_lidar_imu.inverse(), imu_times, imu_poses, frame->stamp, points->times_storage, points->points_storage);
+
+  if (frame->imu_rate_trajectory.size() > 0) {
+    // Integrate IMU trajectory (t, x, y, z, qx, qy, qz, qw) x N
+    const Eigen::Matrix<double, 8, -1>& imu_traj = frame->imu_rate_trajectory;
+
+    std::vector<double> imu_times(imu_traj.cols());
+    std::vector<Eigen::Isometry3d> imu_poses(imu_traj.cols());
+    for (int i = 0; i < imu_traj.cols(); i++) {
+      imu_times[i] = imu_traj(0, i);
+      imu_poses[i] = Eigen::Isometry3d::Identity();
+      imu_poses[i].translation() = imu_traj.block<3, 1>(1, i);
+      imu_poses[i].linear() = Eigen::Quaterniond(imu_traj(7, i), imu_traj(4, i), imu_traj(5, i), imu_traj(6, i)).toRotationMatrix();
+    }
+
+    result->deskewed_points_lidar = deskewing->deskew(T_lidar_imu.inverse(), imu_times, imu_poses, frame->stamp, points->times_storage, points->points_storage);
+  } else {
+    result->deskewed_points_lidar.assign(points->points, points->points + points->size());
+  }
 
   result->deskewed_points_imu.resize(result->deskewed_points_lidar.size());
   const Eigen::Isometry3d T_imu_lidar = T_lidar_imu.inverse();
@@ -205,6 +216,31 @@ void DeskewingModule::save_deskewed_frame(const DeskewingResult::Ptr& result) {
     const std::string filename = fmt::format("{}/deskewed_imu_{:06d}.ply", params.ply_path, result->frame->id);
     glk::save_ply_binary(filename, ply);
     logger->debug("saved deskewed IMU points to {}", filename);
+  }
+
+  if (params.save_raw_points) {
+    ply.vertices.resize(raw_points->points.size());
+    for (int i = 0; i < raw_points->points.size(); i++) {
+      ply.vertices[i] = raw_points->points[i].cast<float>().head<3>();
+    }
+
+    if (!raw_points->times.empty()) {
+      std::vector<float> times_f(raw_points->times.size());
+      std::copy(raw_points->times.begin(), raw_points->times.end(), times_f.begin());
+
+      auto time_prop = std::make_shared<glk::PLYPropertyBuffer<float>>("time", times_f.data(), times_f.size());
+      ply.properties.push_back(time_prop);
+
+      std::vector<double> abs_times(raw_points->times.size());
+      std::transform(raw_points->times.begin(), raw_points->times.end(), abs_times.begin(), [result](double t) { return result->frame->stamp + t; });
+
+      auto abs_time_prop = std::make_shared<glk::PLYPropertyBuffer<double>>("abs_time", abs_times.data(), abs_times.size());
+      ply.properties.push_back(abs_time_prop);
+    }
+
+    const std::string filename = fmt::format("{}/raw_{:06d}.ply", params.raw_ply_path, result->frame->id);
+    glk::save_ply_binary(filename, ply);
+    logger->debug("saved raw points to {}", filename);
   }
 }
 

@@ -30,9 +30,11 @@ public:
 public:
   bool use_thread;  // Whether to use a separate thread for deskewing. If false, deskewing will be done in the odometry thread.
   bool save_ply;
+  bool save_raw_points;
   bool save_points_lidar;
   bool save_points_imu;
   std::string ply_path;
+  std::string raw_ply_path;
 };
 
 struct DeskewingResult {

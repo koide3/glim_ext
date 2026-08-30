@@ -4,6 +4,8 @@
     "save_ply": false,
     "save_points_lidar": false,
     "save_points_imu": true,
-    "ply_path": "/tmp/dump/deskewed_points"
+    "save_raw_points": false,
+    "ply_path": "/tmp/dump/deskewed_points",
+    "raw_ply_path": "/tmp/dump/raw_points"
   }
 }

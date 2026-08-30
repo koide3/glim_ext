@@ -27,11 +27,6 @@ public:
   double cube_side_length;
   double det_range;
 
-  double gyr_cov;
-  double acc_cov;
-  double b_gyr_cov;
-  double b_acc_cov;
-
   bool extrinsic_est_en;
 };
 

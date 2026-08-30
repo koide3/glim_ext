@@ -59,6 +59,10 @@ void DeskewingModule::publish_deskewed_frame(const DeskewingResult::Ptr& result)
   }
 
   // Scan-end points
+  if (result->frame->imu_rate_trajectory.size() == 0) {
+    logger->warn("IMU rate trajectory is empty. Set save_imu_rate_trajectory=true in config_odometry_*.json");
+    return;
+  }
   const auto& imu_rate_traj = result->frame->imu_rate_trajectory;
   const Eigen::Matrix<double, 8, 1> imu_begin = imu_rate_traj.col(0);
   const Eigen::Matrix<double, 8, 1> imu_end = imu_rate_traj.col(imu_rate_traj.cols() - 1);
