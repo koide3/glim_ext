@@ -808,9 +808,26 @@ EstimationFrame::ConstPtr OdometryEstimationFastLIO2::insert_frame(const Preproc
   impl->lasermap_fov_segment();
 
   // Downsample
+  const double leaf_size_surf0 = impl->downSizeFilterSurf.getLeafSize()[0];
+  impl->downSizeFilterSurf.setLeafSize(leaf_size_surf0, leaf_size_surf0, leaf_size_surf0);
   impl->downSizeFilterSurf.setInputCloud(impl->feats_undistort);
   impl->downSizeFilterSurf.filter(*(impl->feats_down_body));
   impl->feats_down_size = impl->feats_down_body->points.size();
+
+  // If it failed to downsample due to too large voxel size, increase the voxel size and try again until we have a reasonable number of points
+  double leaf_size_surf = leaf_size_surf0;
+  while (impl->feats_down_size > 1000 && impl->feats_undistort->size() == impl->feats_down_size && leaf_size_surf < 5.0) {
+    leaf_size_surf *= 1.5;
+    std::cout << "Failed to downsample, |original|=" << impl->feats_undistort->size() << ", |downsampled|=" << impl->feats_down_size << ", increasing voxel size to "
+              << leaf_size_surf << std::endl;
+    std::cout << "Increasing voxel size to " << leaf_size_surf << std::endl;
+
+    impl->downSizeFilterSurf.setLeafSize(leaf_size_surf, leaf_size_surf, leaf_size_surf);
+    impl->downSizeFilterSurf.setInputCloud(impl->feats_undistort);
+    impl->downSizeFilterSurf.filter(*(impl->feats_down_body));
+    impl->feats_down_size = impl->feats_down_body->points.size();
+  }
+  impl->downSizeFilterSurf.setLeafSize(leaf_size_surf0, leaf_size_surf0, leaf_size_surf0);
 
   // Initialize the map kdtree if needed
   if (impl->ikdtree.Root_Node == nullptr) {
